@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
-import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 const Button = ({ status, onChange, recordId }) => {
     const [checked, setChecked] = useState(status);
@@ -37,6 +37,8 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
     const [sections, setSections] = useState([]);
     const [section, setSection] = useState("");
     const [records, setRecords] = useState([]);
+    const [filteredRecords, setFilteredRecords] = useState([]);
+    const [searchQuery, setSearchQuery] = useState("");
     const [attendanceData, setAttendanceData] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -50,6 +52,25 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
     useEffect(() => {
         setDetectedIds(detectedStudentIds);
     }, [detectedStudentIds]);
+
+    // Apply search filter whenever records or search query changes
+    useEffect(() => {
+        if (searchQuery.trim() === '') {
+            setFilteredRecords(records);
+        } else {
+            const query = searchQuery.toLowerCase();
+            const filtered = records.filter(record => {
+                const regNumber = String(record.RegisterNumber).toLowerCase();
+                const name = record.FullName.toLowerCase();
+                const department = record.Department.toLowerCase();
+                
+                return regNumber.includes(query) || 
+                       name.includes(query) || 
+                       department.includes(query);
+            });
+            setFilteredRecords(filtered);
+        }
+    }, [records, searchQuery]);
 
     // Fetch available sections
     useEffect(() => {
@@ -87,6 +108,7 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
                 })
                 .then(data => {
                     setRecords(data);
+                    setFilteredRecords(data);
                     
                     // Initialize attendance data object with current status
                     const initialAttendance = {};
@@ -118,42 +140,31 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
             
             // Mark attendance based on detected IDs
             if (records.length > 0) {
-                const newAutoMarkedStudents = [];
-                const updatedAttendance = { ...attendanceData };
+            const newAutoMarkedStudents = [];
+            const updatedAttendance = { ...attendanceData };
+            
+            records.forEach(record => {
+                const regNumber = String(record.RegisterNumber);
                 
-                records.forEach(record => {
-                    // Ensure register number is a string
-                    const regNumber = String(record.RegisterNumber);
-                    
-                    // Check for match with any of the detected IDs
-                    const matches = detectedStudentIds.some(id => {
-                        // Make sure ID is also a string
-                        const detectedId = String(id);
-                        
-                        // Option 1: Direct match with the 3-digit ID
-                        if (regNumber.endsWith(detectedId)) {
-                            return true;
-                        }
-                        
-                        // Option 2: Match with prefixed ID (714023247xxx)
-                        const fullId = `714023202${detectedId}`;
-                        return regNumber === fullId;
-                    });
-                    
-                    if (matches) {
-                        updatedAttendance[regNumber] = {
-                            ...updatedAttendance[regNumber],
-                            status: true
-                        };
-                        newAutoMarkedStudents.push(regNumber);
-                    }
+                // Direct match: Compare detected IDs to regNumber directly
+                const matches = detectedStudentIds.some(id => {
+                return regNumber === String(id);
                 });
                 
-                if (newAutoMarkedStudents.length > 0) {
-                    setAttendanceData(updatedAttendance);
-                    setAutoMarkedStudents(newAutoMarkedStudents);
-                    console.log(`Automatically marked ${newAutoMarkedStudents.length} students as present:`, newAutoMarkedStudents);
+                if (matches) {
+                updatedAttendance[regNumber] = {
+                    ...updatedAttendance[regNumber],
+                    status: true
+                };
+                newAutoMarkedStudents.push(regNumber);
                 }
+            });
+            
+            if (newAutoMarkedStudents.length > 0) {
+                setAttendanceData(updatedAttendance);
+                setAutoMarkedStudents(newAutoMarkedStudents);
+                console.log(`Automatically marked ${newAutoMarkedStudents.length} students as present:`, newAutoMarkedStudents);
+            }
             }
         }
     }, [detectedStudentIds, records]);
@@ -177,7 +188,7 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
     };
 
     const generateRecord = () => {
-        return records.map((record, index) => {
+        return filteredRecords.map((record, index) => {
             const regNo = record.RegisterNumber;
             const isAutoMarked = autoMarkedStudents.includes(regNo);
             
@@ -323,6 +334,20 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
                                 </option>
                             ))}
                         </select>
+                    </div>
+                    <div className="flex items-center">
+                        <label htmlFor="search-input" className="mr-3 font-medium text-gray-700">Search:</label>
+                        <div className="relative">
+                            <input
+                                id="search-input"
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="px-3 py-2 border rounded-lg pl-10"
+                                placeholder="Search by Reg No, Name, Dept"
+                            />
+                            <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                        </div>
                     </div>
                     <button
                         onClick={saveAttendance}
