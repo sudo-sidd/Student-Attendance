@@ -29,3 +29,5 @@ backend/checkpoints
 backend/LightCNN
 backend/Test
 backend/Data
+backend/__pycache__
+backend/uploads

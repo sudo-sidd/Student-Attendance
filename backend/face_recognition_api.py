@@ -29,10 +29,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-data = pd.read_csv('../NAME_LIST.csv')
+data = pd.read_csv('/mnt/sda1/Project/Student-Attendance/NAME_LIST.csv')
 
 SELECTED_CLASS = "A"
-
+print(data.columns)
 # Global variables to hold models (loaded once at startup)
 face_model = None
 yolo_model = None
@@ -108,14 +108,14 @@ async def save_attendance_csv(attendance_data: AttendanceData):
         media_type="text/csv"
     )
 
-@app.on_event("startup")
+@app.on_event("startup") 
 async def startup_event():
     """Load models and gallery at startup"""
     global face_model, yolo_model, gallery, device
     
     # Path configurations (customize these)
     model_path = "./checkpoints/LightCNN_29Layers_V2_checkpoint.pth.tar"
-    gallery_path = "gal_1.pth"
+    gallery_path = "gal_3.pth"
     yolo_path = "./yolo/weights/yolo11n-face.pt"
     
     # Device setup
