@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-data = pd.read_csv('/mnt/sda1/Project/Student-Attendance/NAME_LIST.csv')
+data = pd.read_csv('../NAME_LIST.csv')
 
 SELECTED_CLASS = "A"
 print(data.columns)
@@ -73,10 +73,30 @@ async def get_sections():
         "sections": list(res.groups.keys())
     }
 
+# Update the get_class endpoint to reload the gallery when section changes
 @app.get('/class/{section}')
 async def get_class(section: str):
+    global SELECTED_CLASS, gallery
     filtered_data = data[data["Section"] == section]
+    print(SELECTED_CLASS)
+    # Update selected class and reload gallery for the new section
+    if SELECTED_CLASS != section:
+        SELECTED_CLASS = section
+        gallery = load_gallery_for_section(SELECTED_CLASS)
+        print(f"Updated selected class to {SELECTED_CLASS} and reloaded gallery")
+    
     return JSONResponse(content=filtered_data.to_dict(orient="records"))
+
+# Add the helper function to load gallery dynamically based on section
+def load_gallery_for_section(section: str):
+    gallery_path = f"ML_{section}.pth"
+    try:
+        loaded_gallery = torch.load(gallery_path)
+        print(f"✓ Gallery loaded for section {section} with {len(loaded_gallery)} identities")
+        return loaded_gallery
+    except Exception as e:
+        print(f"❌ Error loading gallery for section {section}: {e}")
+        return {}
 
 @app.post("/save-attendance-csv")
 async def save_attendance_csv(attendance_data: AttendanceData):
@@ -108,6 +128,7 @@ async def save_attendance_csv(attendance_data: AttendanceData):
         media_type="text/csv"
     )
 
+# Update the startup event to use the helper function
 @app.on_event("startup") 
 async def startup_event():
     """Load models and gallery at startup"""
@@ -115,10 +136,8 @@ async def startup_event():
     
     # Path configurations (customize these)
     model_path = "./checkpoints/LightCNN_29Layers_V2_checkpoint.pth.tar"
-    gallery_path = "gal_3.pth"
     yolo_path = "./yolo/weights/yolo11n-face.pt"
     
-    # Device setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using {device} for inference")
     
@@ -161,17 +180,12 @@ async def startup_event():
         print(f"❌ Error loading YOLO model: {e}")
         raise RuntimeError(f"Failed to load YOLO model: {e}")
     
-    # Load gallery
-    try:
-        gallery = torch.load(gallery_path)
-        print(f"✓ Gallery loaded with {len(gallery)} identities")
-    except Exception as e:
-        print(f"❌ Error loading gallery: {e}")
-        raise RuntimeError(f"Failed to load gallery: {e}")
+    # Load gallery for the default section
+    gallery = load_gallery_for_section(SELECTED_CLASS)
 
-def process_image(image_bytes, threshold=0.6):
+def process_image(image_bytes, threshold=0.45):
     """
-    Process an image for face recognition
+    Process an image for face recognition with identical approach to test_face_api
     
     Args:
         image_bytes: Raw image bytes
@@ -187,19 +201,22 @@ def process_image(image_bytes, threshold=0.6):
     if img is None:
         raise ValueError("Could not decode image")
     
-    # Process each face
+    # Create a copy for drawing results
     result_img = img.copy()
-    faces = []
     face_id = 0
     
     # Detect faces using YOLO
     results = yolo_model(img)
     
-    # Process each detected face
+    # First, collect all face data with complete matching information
+    face_data = []
+    
     for result in results:
         for box in result.boxes:
+            face_id += 1
             x1, y1, x2, y2 = map(int, box.xyxy[0])
-            # Add padding around face
+            
+            # Add padding around face - identical padding as in test_face_api
             h, w = img.shape[:2]
             face_w = x2 - x1
             face_h = y2 - y1
@@ -212,7 +229,11 @@ def process_image(image_bytes, threshold=0.6):
             
             face = img[y1:y2, x1:x2]
             
-            # Convert BGR to grayscale PIL image
+            # Skip invalid faces
+            if face.size == 0 or face.shape[0] == 0 or face.shape[1] == 0:
+                continue
+            
+            # Use simple grayscale conversion - exactly as in test_face_api
             face_pil = Image.fromarray(cv2.cvtColor(face, cv2.COLOR_BGR2GRAY))
             
             # Get face tensor and extract embedding
@@ -222,49 +243,83 @@ def process_image(image_bytes, threshold=0.6):
                 _, embedding = face_model(face_tensor)
                 face_embedding = embedding.cpu().squeeze().numpy()
             
-            # Find best match
-            best_match = "Unknown"
-            best_score = -1
-            
+            # Find all potential matches above threshold
+            matches = []
             for identity, gallery_embedding in gallery.items():
-                # Calculate cosine similarity
                 similarity = 1 - cosine(face_embedding, gallery_embedding)
-                
-                if similarity > threshold and similarity > best_score:
-                    best_score = similarity
-                    best_match = identity
+                if similarity > threshold:
+                    matches.append((identity, similarity))
             
-            # Draw result on image
-            if best_match != "Unknown":
-                # Known identity - green box
-                cv2.rectangle(result_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                label = f"{best_match} ({best_score:.2f})"
-                cv2.putText(result_img, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-            else:
-                # Unknown - red box
-                cv2.rectangle(result_img, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                cv2.putText(result_img, "Unknown", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+            # Sort matches by confidence (highest first)
+            matches.sort(key=lambda x: x[1], reverse=True)
             
-            # Add to results
-            face_id += 1
-            confidence = float(best_score) if best_score > 0 else 0.0
-            faces.append(RecognitionResult(
-                face_id=face_id,
-                identity=best_match,
-                confidence=confidence,
-                bbox=[int(x1), int(y1), int(x2), int(y2)]
-            ))
+            # Store all data for this face
+            face_data.append({
+                'id': face_id,
+                'bbox': (x1, y1, x2, y2),
+                'matches': matches
+            })
+    
+    # Sort faces by their highest confidence score (descending)
+    # This ensures faces with stronger matches are processed first
+    face_data.sort(key=lambda x: x['matches'][0][1] if x['matches'] else 0, reverse=True)
+    
+    # Assign identities without duplicates
+    assigned_identities = set()
+    face_results = []
+    
+    for data in face_data:
+        face_id = data['id']
+        x1, y1, x2, y2 = data['bbox']
+        matches = data['matches']
+        
+        # Try to find a unique match
+        best_match = "Unknown"
+        best_score = -1
+        
+        for identity, score in matches:
+            if identity not in assigned_identities:
+                best_match = identity
+                best_score = score
+                break
+        
+        # If we found a valid match, mark it as assigned
+        if best_match != "Unknown":
+            assigned_identities.add(best_match)
+        
+        # Draw result on image
+        if best_match != "Unknown":
+            # Known identity - green box
+            cv2.rectangle(result_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            label = f"{best_match} ({best_score:.2f})"
+            cv2.putText(result_img, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        else:
+            # Unknown - red box
+            cv2.rectangle(result_img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.putText(result_img, "Unknown", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        
+        # Add to results
+        # confidence = float(best_score) if best_score > 0 else 0.0
+        face_results.append(RecognitionResult(
+            face_id=face_id,  # Use the original face_id directly
+            identity=best_match,
+            confidence=best_score,
+            bbox=[int(x1), int(y1), int(x2), int(y2)]
+        ))
+    
+    # Save the result image
+    cv2.imwrite('result.jpg', result_img)
     
     # Encode image to base64 to return in response
     _, buffer = cv2.imencode('.jpg', result_img)
     img_base64 = base64.b64encode(buffer).decode('utf-8')
     
-    return img_base64, faces
+    return img_base64, face_results
 
 @app.post("/upload-image/")
 async def upload_and_recognize(
     file: UploadFile = File(...),
-    threshold: float = Form(0.6)
+    threshold: float = Form(0.45)
 ):
     """
     Upload and process an image for face recognition.

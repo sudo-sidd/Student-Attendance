@@ -37,7 +37,7 @@ function App() {
     // Change from "image" to "file" to match what the API expects
     formData.append("file", selectedImage);
     // Add the threshold parameter which appears to be required by the API
-    formData.append("threshold", "0.6");
+    formData.append("threshold", "0.45");
   
     try {
       const response = await fetch("http://127.0.0.1:8000/upload-image/", {
@@ -51,13 +51,15 @@ function App() {
       }
       
       const data = await response.json();
+      setPreview(`data:image/jpeg;base64,${data.image_base64}`);
+
       console.log("Upload success:", data);
       
       // Extract face identities from the response format you showed
       if (data.faces && Array.isArray(data.faces)) {
         // Extract only identities that aren't "Unknown" and have sufficient confidence
         const detectedIds = data.faces
-          .filter(face => face.identity !== "Unknown" && face.confidence > 0.6)
+          .filter(face => face.identity !== "Unknown" && face.confidence > 0.45)
           .map(face => face.identity);
         
         setDetectedStudentIds(detectedIds);

@@ -60,9 +60,9 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
         } else {
             const query = searchQuery.toLowerCase();
             const filtered = records.filter(record => {
-                const regNumber = String(record.RegisterNumber).toLowerCase();
-                const name = record.FullName.toLowerCase();
-                const department = record.Department.toLowerCase();
+                const regNumber = record.RegisterNumber ? String(record.RegisterNumber).toLowerCase() : "";
+                const name = record.FullName ? record.FullName.toLowerCase() : "";
+                const department = record.Department ? record.Department.toLowerCase() : "";
                 
                 return regNumber.includes(query) || 
                        name.includes(query) || 
@@ -206,7 +206,8 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
                         {record.FullName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                        {record.Department}
+                        {/* {record.Department} */}
+                        AI ML
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
                         8:30 AM
