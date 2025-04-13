@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import sqlite3
 from pathlib import Path
 import logging
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import pandas as pd
 import io
@@ -435,10 +435,11 @@ async def submit_attendance(
     section_name: str = Form(...),
     subject_code: str = Form(...),
     date: str = Form(...),
-    time: str = Form(...),
+    start_time: str = Form(...),
+    end_time: str = Form(...),
     attendance: str = Form(...)
 ):
-    logger.info(f"Received /submit-attendance: dept_name={dept_name}, year={year}, section_name={section_name}, subject_code={subject_code}, date={date}, time={time}")
+    logger.info(f"Received /submit-attendance: dept_name={dept_name}, year={year}, section_name={section_name}, subject_code={subject_code}, date={date}, start_time={start_time}, end_time={end_time}")
     try:
         # Parse attendance JSON
         try:
@@ -471,7 +472,7 @@ async def submit_attendance(
             raise HTTPException(status_code=404, detail="Section not found")
         section_id = section_result["section_id"]
 
-        # Get subject_id from subject_code
+        # Get subject_id
         cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = ?", (subject_code,))
         subject_result = cursor.fetchone()
         if not subject_result:
@@ -479,27 +480,22 @@ async def submit_attendance(
             raise HTTPException(status_code=404, detail=f"Subject code {subject_code} not found")
         subject_id = subject_result["subject_id"]
 
-        # Validate timetable
-        day_of_week = datetime.strptime(date, "%m/%d/%Y").strftime("%A")
+        # Validate date and times
         try:
-            time_obj = datetime.strptime(time, "%H:%M:%S")
-            normalized_time = time_obj.strftime("%H:%M")
+            datetime.strptime(date, "%m/%d/%Y")
         except ValueError:
-            normalized_time = time[:5]
-        logger.info(f"Querying timetable: section_id={section_id}, day={day_of_week}, time={normalized_time}, subject_id={subject_id}")
-        cursor.execute("""
-            SELECT timetable_id 
-            FROM Timetable 
-            WHERE section_id = ? 
-            AND day_of_week = ? 
-            AND start_time = ?
-        """, (section_id, day_of_week, normalized_time))
-        timetable_result = cursor.fetchone()
-
-        if not timetable_result:
             conn.close()
-            raise HTTPException(status_code=404, detail=f"No timetable slot found for {normalized_time} on {day_of_week}. Please add a schedule for this time.")
-        timetable_id = timetable_result["timetable_id"]
+            raise HTTPException(status_code=422, detail="Invalid date format. Use MM/DD/YYYY")
+        try:
+            start_time_obj = datetime.strptime(start_time, "%H:%M")
+            end_time_obj = datetime.strptime(end_time, "%H:%M")
+            if start_time_obj >= end_time_obj:
+                raise ValueError("End time must be after start time")
+        except ValueError as e:
+            conn.close()
+            raise HTTPException(status_code=422, detail=f"Invalid time format: {str(e)}")
+        normalized_start_time = start_time[:5]
+        normalized_end_time = end_time[:5]
 
         # Prepare attendance data
         attendance_data = []
@@ -510,12 +506,21 @@ async def submit_attendance(
                 conn.close()
                 raise HTTPException(status_code=404, detail=f"Student {entry['register_number']} not found")
             student_id = student_result["student_id"]
-            attendance_data.append((student_id, timetable_id, date, entry["is_present"]))
+            attendance_data.append((
+                student_id,
+                section_id,
+                subject_id,
+                date,
+                normalized_start_time,
+                normalized_end_time,
+                entry["is_present"]
+            ))
 
         # Insert or update attendance
         cursor.executemany("""
-            INSERT OR REPLACE INTO Attendance (student_id, timetable_id, date, is_present) 
-            VALUES (?, ?, ?, ?)
+            INSERT OR REPLACE INTO Attendance (
+                student_id, section_id, subject_id, date, start_time, end_time, is_present
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """, attendance_data)
         conn.commit()
         conn.close()
@@ -526,8 +531,104 @@ async def submit_attendance(
         raise e
     except Exception as e:
         logger.error(f"Error submitting attendance: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")  
-        
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/get-attendance")
+async def get_attendance(
+    dept_name: Optional[str] = None,
+    year: Optional[int] = None,
+    section_name: Optional[str] = None,
+    subject_code: Optional[str] = None,
+    date: Optional[str] = None
+):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT 
+                a.attendance_id,
+                s.register_number,
+                s.name,
+                sec.section_name,
+                sub.subject_code,
+                sub.subject_name,
+                a.date,
+                a.start_time,
+                a.end_time,
+                a.is_present
+            FROM Attendance a
+            JOIN Students s ON a.student_id = s.student_id
+            JOIN Sections sec ON a.section_id = sec.section_id
+            JOIN Batches b ON sec.batch_id = b.batch_id
+            JOIN Departments d ON b.dept_id = d.dept_id
+            JOIN Subjects sub ON a.subject_id = sub.subject_id
+            WHERE 1=1
+        """
+        params = []
+
+        if dept_name:
+            query += " AND d.dept_name = ?"
+            params.append(dept_name)
+        if year is not None:
+            query += " AND b.year = ?"
+            params.append(year)
+        if section_name:
+            query += " AND sec.section_name = ?"
+            params.append(section_name)
+        if subject_code:
+            query += " AND sub.subject_code = ?"
+            params.append(subject_code)
+        if date:
+            query += " AND a.date = ?"
+            params.append(date)
+
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        conn.close()
+
+        attendance_records = [
+            {
+                "attendance_id": row["attendance_id"],
+                "register_number": row["register_number"],
+                "name": row["name"],
+                "section_name": row["section_name"],
+                "subject_code": row["subject_code"],
+                "subject_name": row["subject_name"],
+                "date": row["date"],
+                "start_time": row["start_time"],
+                "end_time": row["end_time"],
+                "is_present": row["is_present"]
+            }
+            for row in results
+        ]
+        return {"attendance": attendance_records}
+    except Exception as e:
+        logger.error(f"Error in /get-attendance: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching attendance: {str(e)}")
+
+@app.delete("/delete-attendance/{attendance_id}")
+async def delete_attendance(attendance_id: int):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT attendance_id FROM Attendance WHERE attendance_id = ?", (attendance_id,))
+        if not cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=404, detail="Attendance record not found")
+
+        cursor.execute("DELETE FROM Attendance WHERE attendance_id = ?", (attendance_id,))
+        conn.commit()
+        conn.close()
+        logger.info(f"Deleted attendance_id={attendance_id}")
+        return {"message": "Attendance record deleted successfully"}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error in /delete-attendance: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting attendance: {str(e)}")
+   
 # Super Admin Endpoints
 @app.get("/batches", response_model=List[BatchResponse])
 async def get_batches():
