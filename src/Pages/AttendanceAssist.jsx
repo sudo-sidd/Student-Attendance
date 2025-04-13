@@ -115,9 +115,6 @@ export default function AttendanceAssist() {
     <div className="min-h-screen bg-gray-100">
       <header className="border-b border-gray-200 p-4 flex justify-between items-center bg-white shadow-sm">
         <h1 className="text-xl font-semibold text-gray-800">AI Attendance Assist</h1>
-        <button className="p-2 text-gray-600 hover:text-gray-800">
-          <Menu size={24} />
-        </button>
       </header>
 
       <main className="p-6 max-w-2xl mx-auto">

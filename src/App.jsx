@@ -1,9 +1,13 @@
-import './App.css'
-import { useState } from 'react'
-import { CloudArrowUpIcon, PhotoIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
-import { XCircleIcon } from '@heroicons/react/24/solid'
-import Header from './components/Header'
-import AttendanceTable from './components/AttendanceTable'
+import "./App.css";
+import { useState, useEffect } from "react";
+import {
+  CloudArrowUpIcon,
+  PhotoIcon,
+  CheckCircleIcon,
+} from "@heroicons/react/24/outline";
+import { XCircleIcon } from "@heroicons/react/24/solid";
+import Header from "./components/Header";
+import AttendanceTable from "./components/AttendanceTable";
 
 function App() {
   const [preview, setPreview] = useState(null);
@@ -12,7 +16,10 @@ function App() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [detectedStudentIds, setDetectedStudentIds] = useState([]);
-  
+  const [attendanceData, setAttendanceData] = useState({});
+  const [autoMarkedStudents, setAutoMarkedStudents] = useState([]);
+  const [records, setRecords] = useState([]);
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -29,46 +36,47 @@ function App() {
       setUploadError("Please select an image first.");
       return;
     }
-  
+
     setIsUploading(true);
     setUploadError(null);
-    
+
     const formData = new FormData();
     // Change from "image" to "file" to match what the API expects
     formData.append("file", selectedImage);
     // Add the threshold parameter which appears to be required by the API
-    formData.append("threshold", "0.45");
-  
+    formData.append("threshold", "0.4");
+
     try {
       const response = await fetch("http://127.0.0.1:8000/upload-image/", {
         method: "POST",
         body: formData,
         // Don't set Content-Type header - the browser will set it correctly with the boundary
       });
-  
+
       if (!response.ok) {
         throw new Error(`Server responded with status: ${response.status}`);
       }
-      
+
       const data = await response.json();
       setPreview(`data:image/jpeg;base64,${data.image_base64}`);
-
       console.log("Upload success:", data);
-      
+
       // Extract face identities from the response format you showed
       if (data.faces && Array.isArray(data.faces)) {
         // Extract only identities that aren't "Unknown" and have sufficient confidence
         const detectedIds = data.faces
-          .filter(face => face.identity !== "Unknown" && face.confidence > 0.45)
-          .map(face => face.identity);
-        
+          .filter(
+            (face) => face.identity !== "Unknown" && face.confidence > 0.6
+          )
+          .map((face) => face.identity);
+
         setDetectedStudentIds(detectedIds);
         console.log("Detected student IDs:", detectedIds);
       } else {
         console.warn("No faces array found in response:", data);
         setDetectedStudentIds([]);
       }
-      
+
       setUploadSuccess(true);
     } catch (error) {
       console.error("Upload failed:", error);
@@ -86,32 +94,80 @@ function App() {
     setDetectedStudentIds([]);
   };
 
+  // Update detected IDs when props change and automatically mark students
+  useEffect(() => {
+    if (detectedStudentIds && Array.isArray(detectedStudentIds) && detectedStudentIds.length > 0) {
+        console.log("Processing detected student IDs:", detectedStudentIds);
+        
+        // Mark attendance based on detected IDs
+        if (records.length > 0) {
+            const newAutoMarkedStudents = [];
+            const updatedAttendance = { ...attendanceData };
+            
+            records.forEach(record => {
+                const regNumber = String(record.RegisterNumber);
+                
+                // Check for match with any of the detected IDs
+                const matches = detectedStudentIds.some(id => {
+                    const strId = String(id);
+                    
+                    // Check if the register number ends with the detected ID
+                    // This handles cases where the API returns just the short ID
+                    return regNumber.endsWith(strId);
+                });
+                
+                if (matches) {
+                    updatedAttendance[regNumber] = {
+                        ...updatedAttendance[regNumber],
+                        status: true
+                    };
+                    newAutoMarkedStudents.push(regNumber);
+                }
+            });
+            
+            if (newAutoMarkedStudents.length > 0) {
+                setAttendanceData(updatedAttendance);
+                setAutoMarkedStudents(newAutoMarkedStudents);
+                console.log(`Automatically marked ${newAutoMarkedStudents.length} students as present:`, newAutoMarkedStudents);
+            }
+        }
+    }
+}, [detectedStudentIds, records, attendanceData]);
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header/>
+      <Header />
       <main className="container mx-auto py-6 px-4">
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Classroom Student Recognition</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            Classroom Student Recognition
+          </h2>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
             <div className="flex flex-col items-center">
               <div className="h-64 w-full max-w-lg bg-gray-100 rounded-lg flex items-center justify-center mb-5 overflow-hidden">
                 {preview ? (
-                  <img src={preview} alt="Preview" className="max-h-full object-contain" />
+                  <img
+                    src={preview}
+                    alt="Preview"
+                    className="max-h-full object-contain"
+                  />
                 ) : (
                   <div className="text-center p-6">
                     <PhotoIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                    <span className="text-gray-500">Upload a classroom image to detect attendance</span>
+                    <span className="text-gray-500">
+                      Upload a classroom image to detect attendance
+                    </span>
                   </div>
                 )}
               </div>
-              
+
               {uploadError && (
                 <div className="w-full max-w-lg mb-4 bg-red-50 text-red-800 px-4 py-2 rounded-lg border border-red-200 flex items-center">
                   <XCircleIcon className="h-5 w-5 mr-2 text-red-600" />
                   <span>{uploadError}</span>
                 </div>
               )}
-              
+
               <div className="flex flex-wrap gap-3 justify-center">
                 {!selectedImage && (
                   <label
@@ -130,7 +186,7 @@ function App() {
                     />
                   </label>
                 )}
-                
+
                 {selectedImage && !uploadSuccess && (
                   <>
                     <button
@@ -150,7 +206,7 @@ function App() {
                         </>
                       )}
                     </button>
-                    
+
                     <button
                       onClick={resetImage}
                       disabled={isUploading}
@@ -160,12 +216,15 @@ function App() {
                     </button>
                   </>
                 )}
-                
+
                 {uploadSuccess && (
                   <>
                     <div className="bg-green-50 text-green-800 px-4 py-2 rounded-lg border border-green-200 flex items-center">
                       <CheckCircleIcon className="h-5 w-5 mr-2" />
-                      Image processed successfully! {detectedStudentIds.length > 0 ? `${detectedStudentIds.length} students detected.` : ''}
+                      Image processed successfully!{" "}
+                      {detectedStudentIds.length > 0
+                        ? `${detectedStudentIds.length} students detected.`
+                        : ""}
                     </div>
                     <button
                       onClick={resetImage}
@@ -183,7 +242,7 @@ function App() {
         <AttendanceTable detectedStudentIds={detectedStudentIds} />
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

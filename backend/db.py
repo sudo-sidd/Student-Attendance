@@ -50,16 +50,16 @@
 #             FOREIGN KEY (section_id) REFERENCES Sections(section_id),
 #             FOREIGN KEY (subject_id) REFERENCES Subjects(subject_id)
 #         );
-#         CREATE TABLE IF NOT EXISTS Attendance (
-#             attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
-#             student_id INTEGER NOT NULL,
-#             timetable_id INTEGER NOT NULL,
-#             date TEXT NOT NULL,
-#             is_present INTEGER NOT NULL DEFAULT 0,
-#             FOREIGN KEY (student_id) REFERENCES Students(student_id),
-#             FOREIGN KEY (timetable_id) REFERENCES Timetable(timetable_id),
-#             UNIQUE(student_id, timetable_id, date)
-#         );
+        # CREATE TABLE IF NOT EXISTS Attendance (
+        #     attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #     student_id INTEGER NOT NULL,
+        #     timetable_id INTEGER NOT NULL,
+        #     date TEXT NOT NULL,
+        #     is_present INTEGER NOT NULL DEFAULT 0,
+        #     FOREIGN KEY (student_id) REFERENCES Students(student_id),
+        #     FOREIGN KEY (timetable_id) REFERENCES Timetable(timetable_id),
+        #     UNIQUE(student_id, timetable_id, date)
+        # );
 #     """)
 #     conn.commit()
 
