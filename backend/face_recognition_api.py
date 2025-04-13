@@ -185,11 +185,11 @@ async def startup_event():
 
 def process_image(image_bytes, threshold=0.45):
     """
-    Process an image for face recognition with identical approach to test_face_api
+    Process an image for face recognition with dynamic thresholding based on face size
     
     Args:
         image_bytes: Raw image bytes
-        threshold: Recognition confidence threshold
+        threshold: Base recognition confidence threshold
         
     Returns:
         Tuple of (processed_image, recognition_results)
@@ -208,6 +208,10 @@ def process_image(image_bytes, threshold=0.45):
     # Detect faces using YOLO
     results = yolo_model(img)
     
+    # Get image dimensions to calculate relative face sizes
+    img_height, img_width = img.shape[:2]
+    img_area = img_height * img_width
+    
     # First, collect all face data with complete matching information
     face_data = []
     
@@ -215,6 +219,25 @@ def process_image(image_bytes, threshold=0.45):
         for box in result.boxes:
             face_id += 1
             x1, y1, x2, y2 = map(int, box.xyxy[0])
+            
+            # Calculate original face size before padding
+            orig_face_width = x2 - x1
+            orig_face_height = y2 - y1
+            face_area = orig_face_width * orig_face_height
+            
+            # Calculate face size ratio relative to the image
+            face_ratio = face_area / img_area
+            
+            # Adjust threshold based on face size
+            # Smaller faces get more lenient thresholds, larger faces get stricter thresholds
+            if face_ratio < 0.01:  # Very small face (less than 1% of image)
+                dynamic_threshold = max(threshold - 0.1, 0.2)  # Lower threshold but not below 0.2
+            elif face_ratio < 0.03:  # Small face (1-3% of image)
+                dynamic_threshold = max(threshold - 0.05, 0.3)  # Slightly lower threshold
+            elif face_ratio > 0.15:  # Large face (>15% of image)
+                dynamic_threshold = min(threshold + 0.1, 0.9)  # Higher threshold but not above 0.9
+            else:
+                dynamic_threshold = threshold  # Default threshold
             
             # Add padding around face - identical padding as in test_face_api
             h, w = img.shape[:2]
@@ -233,8 +256,22 @@ def process_image(image_bytes, threshold=0.45):
             if face.size == 0 or face.shape[0] == 0 or face.shape[1] == 0:
                 continue
             
-            # Use simple grayscale conversion - exactly as in test_face_api
-            face_pil = Image.fromarray(cv2.cvtColor(face, cv2.COLOR_BGR2GRAY))
+            # Apply image enhancement techniques for better recognition
+            # 1. Convert to grayscale
+            gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+            
+            # 2. Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            enhanced_face = clahe.apply(gray_face)
+            
+            # 3. Apply slight Gaussian blur to reduce noise
+            enhanced_face = cv2.GaussianBlur(enhanced_face, (3, 3), 0)
+            
+            # 4. Normalize the image
+            enhanced_face = cv2.normalize(enhanced_face, None, 0, 255, cv2.NORM_MINMAX)
+            
+            # Convert to PIL image
+            face_pil = Image.fromarray(enhanced_face)
             
             # Get face tensor and extract embedding
             face_tensor = transform(face_pil).unsqueeze(0).to(device)
@@ -243,25 +280,26 @@ def process_image(image_bytes, threshold=0.45):
                 _, embedding = face_model(face_tensor)
                 face_embedding = embedding.cpu().squeeze().numpy()
             
-            # Find all potential matches above threshold
+            # Find all potential matches above the dynamic threshold
             matches = []
             for identity, gallery_embedding in gallery.items():
                 similarity = 1 - cosine(face_embedding, gallery_embedding)
-                if similarity > threshold:
+                if similarity > dynamic_threshold:
                     matches.append((identity, similarity))
             
             # Sort matches by confidence (highest first)
             matches.sort(key=lambda x: x[1], reverse=True)
             
-            # Store all data for this face
+            # Store all data for this face including the dynamic threshold
             face_data.append({
                 'id': face_id,
                 'bbox': (x1, y1, x2, y2),
-                'matches': matches
+                'matches': matches,
+                'face_size': face_ratio,
+                'threshold': dynamic_threshold
             })
     
     # Sort faces by their highest confidence score (descending)
-    # This ensures faces with stronger matches are processed first
     face_data.sort(key=lambda x: x['matches'][0][1] if x['matches'] else 0, reverse=True)
     
     # Assign identities without duplicates
@@ -272,6 +310,8 @@ def process_image(image_bytes, threshold=0.45):
         face_id = data['id']
         x1, y1, x2, y2 = data['bbox']
         matches = data['matches']
+        face_ratio = data['face_size']
+        dynamic_threshold = data['threshold']
         
         # Try to find a unique match
         best_match = "Unknown"
@@ -291,17 +331,21 @@ def process_image(image_bytes, threshold=0.45):
         if best_match != "Unknown":
             # Known identity - green box
             cv2.rectangle(result_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            label = f"{best_match} ({best_score:.2f})"
+            # Include size & threshold information for debugging
+            size_info = f"{face_ratio*100:.1f}%"
+            label = f"{best_match} ({best_score:.2f}, {size_info})"
             cv2.putText(result_img, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         else:
             # Unknown - red box
             cv2.rectangle(result_img, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(result_img, "Unknown", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+            # Include size & threshold information for debugging
+            size_info = f"{face_ratio*100:.1f}%"
+            label = f"Unknown ({size_info}, thr:{dynamic_threshold:.2f})"
+            cv2.putText(result_img, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
         
         # Add to results
-        # confidence = float(best_score) if best_score > 0 else 0.0
         face_results.append(RecognitionResult(
-            face_id=face_id,  # Use the original face_id directly
+            face_id=face_id,
             identity=best_match,
             confidence=best_score,
             bbox=[int(x1), int(y1), int(x2), int(y2)]
