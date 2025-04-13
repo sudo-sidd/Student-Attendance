@@ -31,3 +31,7 @@ backend/Test
 backend/Data
 backend/__pycache__
 backend/uploads
+backend/result.jpg
+backend/result.png
+uploads/processed.jpg
+uploads/uploaded_20250411145644.jpg

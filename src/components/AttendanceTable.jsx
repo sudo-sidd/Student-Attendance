@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useImperativeHandle, forwardRef } from "react";
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import { ArrowDownTrayIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
@@ -24,7 +24,7 @@ const Button = ({ status, onChange, recordId }) => {
             className={`inline-flex items-center justify-center gap-x-2 px-4 py-2 text-sm font-semibold rounded-lg border transition-all duration-200 shadow-sm
                 ${checked 
                     ? 'bg-green-600 text-white hover:bg-green-700 border-green-700' 
-                    : 'bg-red-500 text-white border-red-600 hover:bg-red-700'} 
+                    : 'bg-red-400 text-white border-red-400 hover:bg-red-500'} 
                 focus:outline-none focus:ring-2 focus:ring-offset-2 ${checked ? 'focus:ring-green-500' : 'focus:ring-red-500'}`}
         >
             {checked ? <CheckCircleIcon className="w-4 h-4" /> : <XCircleIcon className="w-4 h-4" />}
@@ -33,7 +33,7 @@ const Button = ({ status, onChange, recordId }) => {
     );
 };
 
-const AttendanceTable = ({ detectedStudentIds = [] }) => {
+const AttendanceTable = forwardRef(({ detectedStudentIds = [] }, ref) => {
     const [sections, setSections] = useState([]);
     const [section, setSection] = useState("");
     const [records, setRecords] = useState([]);
@@ -47,6 +47,10 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
     const [saveError, setSaveError] = useState(null);
     const [detectedIds, setDetectedIds] = useState([]);
     const [autoMarkedStudents, setAutoMarkedStudents] = useState([]);
+
+    useImperativeHandle(ref, () => ({
+        setDetectedIds,
+    }));
 
     // Update detected IDs
     useEffect(() => {
@@ -445,6 +449,6 @@ const AttendanceTable = ({ detectedStudentIds = [] }) => {
             </div>
         </div>
     );
-};
-
+});
+AttendanceTable.displayName = 'AttendanceTable';
 export default AttendanceTable;
