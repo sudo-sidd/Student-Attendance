@@ -13,7 +13,9 @@ const AttendanceForm = () => {
     section_name: "",
     subject_code: "",
     date: "",
-    time: "",
+    start_time: "",
+    end_time: "",
+    day_of_week: "",
   });
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -21,6 +23,20 @@ const AttendanceForm = () => {
   // Set current date and time on mount
   useEffect(() => {
     const now = new Date();
+    const startTime = now.toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    // Assume slot duration is 1 hour
+    const endTimeObj = new Date(now.getTime() + 60 * 60 * 1000);
+    const endTime = endTimeObj.toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const dayOfWeek = now.toLocaleString("en-US", { weekday: "long" });
+
     setFormData((prev) => ({
       ...prev,
       date: now
@@ -30,15 +46,11 @@ const AttendanceForm = () => {
           year: "numeric",
         })
         .replace(/\//g, "/"),
-      time: now.toLocaleTimeString("en-US", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
+      start_time: startTime,
+      end_time: endTime,
+      day_of_week: dayOfWeek,
     }));
 
-    // Fetch departments
     axios
       .get("http://localhost:8000/departments")
       .then((response) => setDepartments(response.data))
@@ -108,7 +120,7 @@ const AttendanceForm = () => {
     setError(null); // Clear error on change
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (
       !formData.dept_name ||
@@ -116,14 +128,41 @@ const AttendanceForm = () => {
       !formData.section_name ||
       !formData.subject_code ||
       !formData.date ||
-      !formData.time
+      !formData.start_time ||
+      !formData.end_time ||
+      !formData.day_of_week
     ) {
       setError("Please fill all fields");
       return;
     }
 
-    sessionStorage.setItem("attendanceForm", JSON.stringify(formData));
-    navigate("/attendance-assist");
+    try {
+      // Create or verify timetable slot
+      const response = await axios.post(
+        "http://localhost:8000/create-timetable-slot",
+        {
+          dept_name: formData.dept_name,
+          year: parseInt(formData.year),
+          section_name: formData.section_name,
+          subject_code: formData.subject_code,
+          date: formData.date,
+          start_time: formData.start_time,
+          end_time: formData.end_time,
+          day_of_week: formData.day_of_week,
+        }
+      );
+
+      sessionStorage.setItem(
+        "attendanceForm",
+        JSON.stringify({
+          ...formData,
+          timetable_id: response.data.timetable_id,
+        })
+      );
+      navigate("/attendance-assist");
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to create timetable slot");
+    }
   };
 
   return (
@@ -214,7 +253,7 @@ const AttendanceForm = () => {
             </select>
           </div>
 
-          <div className="mb-4">
+          {/* <div className="mb-4">
             <label className="block text-lg font-medium text-gray-700">
               Date
             </label>
@@ -240,6 +279,46 @@ const AttendanceForm = () => {
               className="w-full p-2 mt-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               readOnly
             />
+          </div> */}
+
+          <div className="mb-4">
+            <label className="block text-lg font-medium text-gray-700">
+              Start Time
+            </label>
+            <input
+              type="text"
+              name="start_time"
+              value={formData.start_time}
+              onChange={handleChange}
+              className="w-full p-2 mt-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              readOnly
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-lg font-medium text-gray-700">
+              End Time
+            </label>
+            <input
+              type="text"
+              name="end_time"
+              value={formData.end_time}
+              onChange={handleChange}
+              className="w-full p-2 mt-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              readOnly
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-lg font-medium text-gray-700">
+              Day of Week
+            </label>
+            <input
+              type="text"
+              name="day_of_week"
+              value={formData.day_of_week}
+              onChange={handleChange}
+              className="w-full p-2 mt-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              readOnly
+            />
           </div>
 
           <button
@@ -255,5 +334,3 @@ const AttendanceForm = () => {
 };
 
 export default AttendanceForm;
-
-

@@ -34,73 +34,156 @@ export default function AttendanceAssist() {
     }
   };
 
+  // const handleProcessImages = async () => {
+  //   if (images.length === 0) {
+  //     setError('Please upload at least one image');
+  //     return;
+  //   }
+
+  //   setIsProcessing(true);
+  //   const formData = new FormData();
+  //   images.forEach((image) => formData.append('images', image.file));
+
+  //   const attendanceForm = JSON.parse(sessionStorage.getItem('attendanceForm') || '{}');
+  //   console.log('Attendance form data:', attendanceForm);
+  //   const requiredFields = ['dept_name', 'year', 'section_name', 'subject_code', 'date', 'time'];
+  //   const missingFields = requiredFields.filter((field) => !attendanceForm[field]);
+  //   if (missingFields.length > 0) {
+  //     setError(`Missing required fields: ${missingFields.join(', ')}`);
+  //     setIsProcessing(false);
+  //     return;
+  //   }
+
+  //   // Normalize time to HH:MM
+  //   let normalizedTime = attendanceForm.time;
+  //   try {
+  //     const timeObj = new Date(`1970-01-01T${attendanceForm.time}`);
+  //     normalizedTime = timeObj.toTimeString().slice(0, 5); // e.g., "11:48"
+  //   } catch (e) {
+  //     console.warn('Invalid time format, using raw:', attendanceForm.time);
+  //   }
+
+  //   formData.append('dept_name', attendanceForm.dept_name);
+  //   formData.append('year', attendanceForm.year);
+  //   formData.append('section_name', attendanceForm.section_name);
+  //   formData.append('subject_code', attendanceForm.subject_code);
+  //   formData.append('date', attendanceForm.date);
+  //   formData.append('time', normalizedTime);
+  //   formData.append('threshold', '0.45');
+
+  //   try {
+  //     const response = await axios.post('http://localhost:8000/process-images', formData, {
+  //       headers: { 'Content-Type': 'multipart/form-data' },
+  //     });
+
+  //     console.log('Backend response:', response.data);
+
+  //     const imagesBase64 = response.data.images_base64 || [];
+
+  //     // Store only essential data without the large base64 images
+  //     sessionStorage.setItem('attendanceData', JSON.stringify({
+  //       ...attendanceForm,
+  //       time: normalizedTime,
+  //       attendance: response.data.attendance,
+  //       // Removed images_base64 to prevent QuotaExceededError
+  //     }));
+
+  //     navigate('/review', {
+  //       state: {
+  //         attendanceData: response.data.attendance || [],
+  //         images_base64: imagesBase64,
+  //         formData: { ...attendanceForm, time: normalizedTime },
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error('Error processing images:', error);
+  //     let errorMessage = 'Failed to process images';
+  //     if (error.response) {
+  //       if (error.response.status === 404) {
+  //         errorMessage = 'Section not found. Check department, year, or section name.';
+  //       } else {
+  //         errorMessage = error.response.data?.detail || error.message;
+  //       }
+  //     }
+  //     setError(errorMessage);
+  //   } finally {
+  //     setIsProcessing(false);
+  //   }
+  // };
+
   const handleProcessImages = async () => {
     if (images.length === 0) {
-      setError('Please upload at least one image');
+      setError("Please upload at least one image");
       return;
     }
-
+  
     setIsProcessing(true);
     const formData = new FormData();
-    images.forEach((image) => formData.append('images', image.file));
-
-    const attendanceForm = JSON.parse(sessionStorage.getItem('attendanceForm') || '{}');
-    console.log('Attendance form data:', attendanceForm);
-    const requiredFields = ['dept_name', 'year', 'section_name', 'subject_code', 'date', 'time'];
+    images.forEach((image) => formData.append("images", image.file));
+  
+    const attendanceForm = JSON.parse(sessionStorage.getItem("attendanceForm") || "{}");
+    console.log("Attendance form data:", attendanceForm);
+    const requiredFields = [
+      "dept_name",
+      "year",
+      "section_name",
+      "subject_code",
+      "date",
+      "start_time",
+      "end_time",
+      "timetable_id",
+    ];
     const missingFields = requiredFields.filter((field) => !attendanceForm[field]);
     if (missingFields.length > 0) {
-      setError(`Missing required fields: ${missingFields.join(', ')}`);
+      setError(`Missing required fields: ${missingFields.join(", ")}`);
       setIsProcessing(false);
       return;
     }
-
-    // Normalize time to HH:MM
-    let normalizedTime = attendanceForm.time;
+  
+    formData.append("dept_name", attendanceForm.dept_name);
+    formData.append("year", attendanceForm.year);
+    formData.append("section_name", attendanceForm.section_name);
+    formData.append("subject_code", attendanceForm.subject_code);
+    formData.append("date", attendanceForm.date);
+    formData.append("start_time", attendanceForm.start_time);
+    formData.append("end_time", attendanceForm.end_time);
+    formData.append("threshold", "0.45");
+  
     try {
-      const timeObj = new Date(`1970-01-01T${attendanceForm.time}`);
-      normalizedTime = timeObj.toTimeString().slice(0, 5); // e.g., "11:48"
-    } catch (e) {
-      console.warn('Invalid time format, using raw:', attendanceForm.time);
-    }
-
-    formData.append('dept_name', attendanceForm.dept_name);
-    formData.append('year', attendanceForm.year);
-    formData.append('section_name', attendanceForm.section_name);
-    formData.append('subject_code', attendanceForm.subject_code);
-    formData.append('date', attendanceForm.date);
-    formData.append('time', normalizedTime);
-    formData.append('threshold', '0.45');
-
-    try {
-      const response = await axios.post('http://localhost:8000/process-images', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      console.log('Backend response:', response.data);
-
+      const response = await axios.post(
+        "http://localhost:8000/process-images",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+  
+      console.log("Backend response:", response.data);
+  
       const imagesBase64 = response.data.images_base64 || [];
-
-      // Store only essential data without the large base64 images
-      sessionStorage.setItem('attendanceData', JSON.stringify({
-        ...attendanceForm,
-        time: normalizedTime,
-        attendance: response.data.attendance,
-        // Removed images_base64 to prevent QuotaExceededError
-      }));
-
-      navigate('/review', {
+  
+      sessionStorage.setItem(
+        "attendanceData",
+        JSON.stringify({
+          ...attendanceForm,
+          attendance: response.data.attendance,
+        })
+      );
+  
+      navigate("/review", {
         state: {
           attendanceData: response.data.attendance || [],
           images_base64: imagesBase64,
-          formData: { ...attendanceForm, time: normalizedTime },
+          formData: { ...attendanceForm },
         },
       });
     } catch (error) {
-      console.error('Error processing images:', error);
-      let errorMessage = 'Failed to process images';
+      console.error("Error processing images:", error);
+      let errorMessage = "Failed to process images";
       if (error.response) {
         if (error.response.status === 404) {
-          errorMessage = 'Section not found. Check department, year, or section name.';
+          errorMessage =
+            "Section not found. Check department, year, or section name.";
         } else {
           errorMessage = error.response.data?.detail || error.message;
         }
@@ -110,6 +193,7 @@ export default function AttendanceAssist() {
       setIsProcessing(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gray-100">

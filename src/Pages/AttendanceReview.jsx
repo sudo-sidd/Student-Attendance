@@ -28,104 +28,147 @@ export default function AttendanceReview() {
     );
   };
 
+  // const handleSaveAttendance = async () => {
+  //   setError(null);
+
+  //   // Validate formData
+  //   const requiredFields = ['dept_name', 'year', 'section_name', 'subject_code', 'date', 'time'];
+  //   const missingFields = requiredFields.filter(field => !formData[field] || formData[field] === '');
+  //   if (missingFields.length > 0) {
+  //     const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
+  //     setError(errorMsg);
+  //     alert(errorMsg);
+  //     return;
+  //   }
+
+  //   // Validate year
+  //   const year = parseInt(formData.year, 10);
+  //   if (isNaN(year) || year <= 0) {
+  //     const errorMsg = 'Year must be a valid positive number';
+  //     setError(errorMsg);
+  //     alert(errorMsg);
+  //     return;
+  //   }
+
+  //   // Validate date format
+  //   let dayOfWeek;
+  //   try {
+  //     const dateObj = new Date(formData.date);
+  //     dayOfWeek = dateObj.toLocaleString('en-US', { weekday: 'long' });
+  //     if (isNaN(dateObj.getTime())) {
+  //       throw new Error('Invalid date');
+  //     }
+  //   } catch (e) {
+  //     const errorMsg = 'Invalid date format. Use MM/DD/YYYY';
+  //     setError(errorMsg);
+  //     alert(errorMsg);
+  //     return;
+  //   }
+
+  //   // Validate attendance
+  //   if (!attendance.length) {
+  //     const errorMsg = 'No attendance data to submit';
+  //     setError(errorMsg);
+  //     alert(errorMsg);
+  //     return;
+  //   }
+  //   for (const entry of attendance) {
+  //     if (!entry.register_number || !entry.name || typeof entry.is_present !== 'number') {
+  //       const errorMsg = `Invalid attendance entry for ${entry.register_number || 'unknown'}`;
+  //       setError(errorMsg);
+  //       alert(errorMsg);
+  //       return;
+  //     }
+  //   }
+
+  //   let normalizedTime = formData.time;
+  //   try {
+  //     const timeObj = new Date(`1970-01-01T${formData.time}`);
+  //     normalizedTime = timeObj.toTimeString().slice(0, 5);
+  //   } catch (e) {
+  //     console.warn('Invalid time format, using raw:', formData.time);
+  //   }
+
+  //   const formDataToSend = new FormData();
+  //   formDataToSend.append('dept_name', formData.dept_name);
+  //   formDataToSend.append('year', String(year));
+  //   formDataToSend.append('section_name', formData.section_name);
+  //   formDataToSend.append('subject_code', formData.subject_code);
+  //   formDataToSend.append('date', formData.date);
+  //   formDataToSend.append('time', normalizedTime);
+  //   const attendanceData = attendance.map(entry => ({
+  //     register_number: entry.register_number,
+  //     name: entry.name,
+  //     is_present: entry.is_present
+  //   }));
+  //   formDataToSend.append('attendance', JSON.stringify(attendanceData));
+
+  //   console.log('Submitting attendance:', {
+  //     dept_name: formData.dept_name,
+  //     year,
+  //     section_name: formData.section_name,
+  //     subject_code: formData.subject_code,
+  //     date: formData.date,
+  //     time: normalizedTime,
+  //     dayOfWeek,
+  //     attendance: attendanceData,
+  //   });
+
+  //   try {
+  //     await axios.post('http://localhost:8000/submit-attendance', formDataToSend);
+  //     alert('Attendance saved successfully!');
+  //     setIsEditing(false);
+  //     sessionStorage.removeItem('attendanceForm');
+  //     sessionStorage.removeItem('attendanceData');
+  //     navigate('/attendance-assist');
+  //   } catch (error) {
+  //     console.error('Error saving attendance:', error);
+  //     const errorMsg = error.response?.status === 404
+  //       ? `Schedule error: ${error.response.data.detail}. Please check the timetable for ${dayOfWeek} at ${normalizedTime}.`
+  //       : `Failed to save attendance: ${error.response?.data?.detail || error.message}`;
+  //     setError(errorMsg);
+  //     alert(errorMsg);
+  //   }
+  // };
+
   const handleSaveAttendance = async () => {
     setError(null);
-
-    // Validate formData
-    const requiredFields = ['dept_name', 'year', 'section_name', 'subject_code', 'date', 'time'];
-    const missingFields = requiredFields.filter(field => !formData[field] || formData[field] === '');
-    if (missingFields.length > 0) {
-      const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
-      setError(errorMsg);
-      alert(errorMsg);
-      return;
-    }
-
-    // Validate year
-    const year = parseInt(formData.year, 10);
-    if (isNaN(year) || year <= 0) {
-      const errorMsg = 'Year must be a valid positive number';
-      setError(errorMsg);
-      alert(errorMsg);
-      return;
-    }
-
-    // Validate date format
-    let dayOfWeek;
-    try {
-      const dateObj = new Date(formData.date);
-      dayOfWeek = dateObj.toLocaleString('en-US', { weekday: 'long' });
-      if (isNaN(dateObj.getTime())) {
-        throw new Error('Invalid date');
-      }
-    } catch (e) {
-      const errorMsg = 'Invalid date format. Use MM/DD/YYYY';
-      setError(errorMsg);
-      alert(errorMsg);
-      return;
-    }
-
+  
     // Validate attendance
     if (!attendance.length) {
-      const errorMsg = 'No attendance data to submit';
+      const errorMsg = "No attendance data to submit";
       setError(errorMsg);
       alert(errorMsg);
       return;
     }
     for (const entry of attendance) {
-      if (!entry.register_number || !entry.name || typeof entry.is_present !== 'number') {
-        const errorMsg = `Invalid attendance entry for ${entry.register_number || 'unknown'}`;
+      if (!entry.register_number || !entry.name || typeof entry.is_present !== "number") {
+        const errorMsg = `Invalid attendance entry for ${entry.register_number || "unknown"}`;
         setError(errorMsg);
         alert(errorMsg);
         return;
       }
     }
-
-    let normalizedTime = formData.time;
-    try {
-      const timeObj = new Date(`1970-01-01T${formData.time}`);
-      normalizedTime = timeObj.toTimeString().slice(0, 5);
-    } catch (e) {
-      console.warn('Invalid time format, using raw:', formData.time);
-    }
-
+  
     const formDataToSend = new FormData();
-    formDataToSend.append('dept_name', formData.dept_name);
-    formDataToSend.append('year', String(year));
-    formDataToSend.append('section_name', formData.section_name);
-    formDataToSend.append('subject_code', formData.subject_code);
-    formDataToSend.append('date', formData.date);
-    formDataToSend.append('time', normalizedTime);
-    const attendanceData = attendance.map(entry => ({
+    formDataToSend.append("timetable_id", formData.timetable_id);
+    const attendanceData = attendance.map((entry) => ({
       register_number: entry.register_number,
       name: entry.name,
-      is_present: entry.is_present
+      is_present: entry.is_present,
     }));
-    formDataToSend.append('attendance', JSON.stringify(attendanceData));
-
-    console.log('Submitting attendance:', {
-      dept_name: formData.dept_name,
-      year,
-      section_name: formData.section_name,
-      subject_code: formData.subject_code,
-      date: formData.date,
-      time: normalizedTime,
-      dayOfWeek,
-      attendance: attendanceData,
-    });
-
+    formDataToSend.append("attendance", JSON.stringify(attendanceData));
+  
     try {
-      await axios.post('http://localhost:8000/submit-attendance', formDataToSend);
-      alert('Attendance saved successfully!');
+      await axios.post("http://localhost:8000/submit-attendance", formDataToSend);
+      alert("Attendance saved successfully!");
       setIsEditing(false);
-      sessionStorage.removeItem('attendanceForm');
-      sessionStorage.removeItem('attendanceData');
-      navigate('/attendance-assist');
+      sessionStorage.removeItem("attendanceForm");
+      sessionStorage.removeItem("attendanceData");
+      navigate("/attendance-assist");
     } catch (error) {
-      console.error('Error saving attendance:', error);
-      const errorMsg = error.response?.status === 404
-        ? `Schedule error: ${error.response.data.detail}. Please check the timetable for ${dayOfWeek} at ${normalizedTime}.`
-        : `Failed to save attendance: ${error.response?.data?.detail || error.message}`;
+      console.error("Error saving attendance:", error);
+      const errorMsg = error.response?.data?.detail || "Failed to save attendance";
       setError(errorMsg);
       alert(errorMsg);
     }
