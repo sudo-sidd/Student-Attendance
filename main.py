@@ -147,7 +147,7 @@ def load_gallery(dept_name: str, year: int, section_name: str):
         return {}
 
 # Process image (using enhancements from old code)
-def process_image(image_bytes, threshold=0.6, gallery=None):
+def process_image(image_bytes, threshold=0.45, gallery=None):
     try:
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -156,11 +156,13 @@ def process_image(image_bytes, threshold=0.6, gallery=None):
 
         result_img = img.copy()
         detected_ids = set()
-
+        
         # Detect faces using YOLO
         results = yolo_model(img)
         logger.info(f"YOLO detected {len(results[0].boxes)} faces")
 
+        # Step 1: Get all faces and their embeddings
+        faces_data = []
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -176,33 +178,55 @@ def process_image(image_bytes, threshold=0.6, gallery=None):
                     continue
 
                 gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                enhanced_face = clahe.apply(gray_face)
-                enhanced_face = cv2.GaussianBlur(enhanced_face, (3, 3), 0)
-                enhanced_face = cv2.normalize(enhanced_face, None, 0, 255, cv2.NORM_MINMAX)
-
-                face_pil = Image.fromarray(enhanced_face)
+                face_pil = Image.fromarray(gray_face)
                 face_tensor = transform(face_pil).unsqueeze(0).to(device)
 
                 with torch.no_grad():
                     _, embedding = face_model(face_tensor)
                     face_embedding = embedding.cpu().squeeze().numpy()
-
-                best_match = "Unknown"
-                best_score = -1
+                
+                # Store all potential matches for this face
+                matches = []
                 for identity, gallery_embedding in gallery.items():
                     similarity = 1 - cosine(face_embedding, gallery_embedding)
-                    if similarity > threshold and similarity > best_score:
-                        best_match = identity
-                        best_score = similarity
-
-                if best_match != "Unknown":
-                    detected_ids.add(best_match)
-
-                color = (0, 255, 0) if best_match != "Unknown" else (0, 0, 255)
-                cv2.rectangle(result_img, (x1, y1), (x2, y2), color, 2)
-                label = f"{best_match} ({best_score:.2f})" if best_match != "Unknown" else "Unknown"
-                cv2.putText(result_img, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                    if similarity > threshold:
+                        matches.append((identity, similarity))
+                
+                # Sort matches by similarity (highest first)
+                matches.sort(key=lambda x: x[1], reverse=True)
+                
+                # Store all face data
+                faces_data.append({
+                    'coords': (x1, y1, x2, y2),
+                    'embedding': face_embedding,
+                    'matches': matches,
+                    'best_match': "Unknown",
+                    'best_score': -1
+                })
+        
+        # Step 2: Assign identities based on highest confidence without duplicates
+        used_identities = set()
+        
+        # First pass: assign identities to faces with highest confidence
+        for face in sorted(faces_data, key=lambda x: max([m[1] for m in x['matches']]) if x['matches'] else 0, reverse=True):
+            for identity, score in face['matches']:
+                if identity not in used_identities:
+                    face['best_match'] = identity
+                    face['best_score'] = score
+                    used_identities.add(identity)
+                    detected_ids.add(identity)
+                    break
+        
+        # Step 3: Draw the results
+        for face in faces_data:
+            x1, y1, x2, y2 = face['coords']
+            best_match = face['best_match']
+            best_score = face['best_score']
+            
+            color = (0, 255, 0) if best_match != "Unknown" else (0, 0, 255)
+            cv2.rectangle(result_img, (x1, y1), (x2, y2), color, 2)
+            label = f"{best_match} ({best_score:.2f})" if best_match != "Unknown" else "Unknown"
+            cv2.putText(result_img, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         _, buffer = cv2.imencode('.jpg', result_img)
         img_base64 = base64.b64encode(buffer).decode('utf-8')
@@ -332,114 +356,6 @@ async def get_subjects_for_batch(dept_name: str, year: int):
         logger.error(f"Error fetching subjects for {dept_name}, year {year}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# @app.post("/process-images")
-# async def process_images(
-#     images: List[UploadFile] = File(...),
-#     dept_name: str = Form(...),
-#     year: int = Form(...),
-#     section_name: str = Form(...),
-#     subject_code: str = Form(...),
-#     date: str = Form(...),
-#     time: str = Form(...),
-#     threshold: float = Form(0.6)
-# ):
-#     if face_model is None or yolo_model is None:
-#         logger.error("Models not loaded")
-#         raise HTTPException(status_code=500, detail="Models not loaded")
-
-#     if not 0 <= threshold <= 1:
-#         raise HTTPException(status_code=400, detail="Threshold must be between 0 and 1")
-
-#     try:
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-
-#         cursor.execute("""
-#             SELECT s.section_id 
-#             FROM Sections s 
-#             JOIN Batches b ON s.batch_id = b.batch_id 
-#             JOIN Departments d ON b.dept_id = d.dept_id 
-#             WHERE d.dept_name = ? AND b.year = ? AND s.section_name = ?
-#         """, (dept_name, year, section_name))
-#         section_result = cursor.fetchone()
-#         if not section_result:
-#             conn.close()
-#             raise HTTPException(status_code=404, detail="Section not found")
-#         section_id = section_result["section_id"]
-        
-
-#         # Load gallery
-#         gallery = load_gallery(dept_name, year, section_name)
-#         if not gallery:
-#             logger.warning("Empty gallery; proceeding with all students marked absent")
-#             cursor.execute("""
-#                 SELECT register_number, name 
-#                 FROM Students 
-#                 WHERE section_id = ?
-#             """, (section_id,))
-#             all_students = {row["register_number"]: row["name"] for row in cursor.fetchall()}
-#             conn.close()
-#             return {
-#                 "attendance": [
-#                     {"register_number": reg_num, "name": name, "is_present": 0}
-#                     for reg_num, name in all_students.items()
-#                 ],
-#                 "image_base64": None,
-#                 "status": "success",
-#                 "message": "No gallery data available; all students marked absent"
-#             }
-
-#         # Get all students
-#         cursor.execute("""
-#             SELECT register_number, name 
-#             FROM Students 
-#             WHERE section_id = ?
-#         """, (section_id,))
-#         all_students = {row["register_number"]: row["name"] for row in cursor.fetchall()}
-#         if not all_students:
-#             conn.close()
-#             logger.warning(f"No students found for section {dept_name} year {year} section {section_name}")
-#             return {
-#                 "attendance": [],
-#                 "images_base64": [],
-#                 "status": "success",
-#                 "message": "No students enrolled in this section"
-#             }
-
-#         # Process images
-#         detected_students = set()
-#         images_base64 = []
-#         for image in images:
-#             contents = await image.read()
-#             img_base64, detected_ids = process_image(contents, threshold, gallery)
-#             images_base64.append(img_base64)
-#             detected_students.update(detected_ids)
-            
-#         # Prepare attendance
-#         attendance = [
-#             {
-#                 "register_number": reg_num,
-#                 "name": name,
-#                 "is_present": 1 if reg_num in detected_students else 0
-#             }
-#             for reg_num, name in all_students.items()
-#         ]
-
-#         conn.close()
-#         logger.info(f"Processed {len(images)} images, detected {len(detected_students)} students")
-#         return {
-#             "attendance": attendance,
-#             "images_base64": images_base64,
-#             "status": "success",
-#             "message": f"Processed {len(images)} images, recognized {len(detected_students)} students"
-#         }
-#     except HTTPException as e:
-#         raise e
-#     except Exception as e:
-#         logger.error(f"Error in /process-images: {e}")
-#         raise HTTPException(status_code=500, detail=f"Error processing images: {str(e)}")
-
-
 @app.post("/process-images")
 async def process_images(
     images: List[UploadFile] = File(...),
@@ -450,7 +366,7 @@ async def process_images(
     date: str = Form(...),
     start_time: str = Form(...),
     end_time: str = Form(...),
-    threshold: float = Form(0.6)
+    threshold: float = Form(0.45)
 ):
     if face_model is None or yolo_model is None:
         logger.error("Models not loaded")
@@ -630,112 +546,6 @@ async def create_timetable_slot(slot: TimetableSlotCreate):
         logger.error(f"Error creating timetable slot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# @app.post("/submit-attendance")
-# async def submit_attendance(
-#     dept_name: str = Form(...),
-#     year: int = Form(...),
-#     section_name: str = Form(...),
-#     subject_code: str = Form(...),
-#     date: str = Form(...),
-#     start_time: str = Form(...),
-#     end_time: str = Form(...),
-#     attendance: str = Form(...)
-# ):
-#     logger.info(f"Received /submit-attendance: dept_name={dept_name}, year={year}, section_name={section_name}, subject_code={subject_code}, date={date}, start_time={start_time}, end_time={end_time}")
-#     try:
-#         # Parse attendance JSON
-#         try:
-#             attendance_list = json.loads(attendance)
-#             if not isinstance(attendance_list, list):
-#                 raise ValueError("Attendance must be a list")
-#             for entry in attendance_list:
-#                 if not all(key in entry for key in ["register_number", "name", "is_present"]):
-#                     raise ValueError("Each attendance entry must have register_number, name, is_present")
-#                 if not isinstance(entry["is_present"], int) or entry["is_present"] not in [0, 1]:
-#                     raise ValueError("is_present must be 0 or 1")
-#         except (json.JSONDecodeError, ValueError) as e:
-#             logger.error(f"Invalid attendance format: {str(e)}")
-#             raise HTTPException(status_code=422, detail=f"Invalid attendance format: {str(e)}")
-
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-
-#         # Get section_id
-#         cursor.execute("""
-#             SELECT s.section_id 
-#             FROM Sections s 
-#             JOIN Batches b ON s.batch_id = b.batch_id 
-#             JOIN Departments d ON b.dept_id = d.dept_id 
-#             WHERE d.dept_name = ? AND b.year = ? AND s.section_name = ?
-#         """, (dept_name, year, section_name))
-#         section_result = cursor.fetchone()
-#         if not section_result:
-#             conn.close()
-#             raise HTTPException(status_code=404, detail="Section not found")
-#         section_id = section_result["section_id"]
-
-#         # Get subject_id
-#         cursor.execute("SELECT subject_id FROM Subjects WHERE subject_code = ?", (subject_code,))
-#         subject_result = cursor.fetchone()
-#         if not subject_result:
-#             conn.close()
-#             raise HTTPException(status_code=404, detail=f"Subject code {subject_code} not found")
-#         subject_id = subject_result["subject_id"]
-
-#         # Validate date and times
-#         try:
-#             datetime.strptime(date, "%m/%d/%Y")
-#         except ValueError:
-#             conn.close()
-#             raise HTTPException(status_code=422, detail="Invalid date format. Use MM/DD/YYYY")
-#         try:
-#             start_time_obj = datetime.strptime(start_time, "%H:%M")
-#             end_time_obj = datetime.strptime(end_time, "%H:%M")
-#             if start_time_obj >= end_time_obj:
-#                 raise ValueError("End time must be after start time")
-#         except ValueError as e:
-#             conn.close()
-#             raise HTTPException(status_code=422, detail=f"Invalid time format: {str(e)}")
-#         normalized_start_time = start_time[:5]
-#         normalized_end_time = end_time[:5]
-
-#         # Prepare attendance data
-#         attendance_data = []
-#         for entry in attendance_list:
-#             cursor.execute("SELECT student_id FROM Students WHERE register_number = ?", (entry["register_number"],))
-#             student_result = cursor.fetchone()
-#             if not student_result:
-#                 conn.close()
-#                 raise HTTPException(status_code=404, detail=f"Student {entry['register_number']} not found")
-#             student_id = student_result["student_id"]
-#             attendance_data.append((
-#                 student_id,
-#                 section_id,
-#                 subject_id,
-#                 date,
-#                 normalized_start_time,
-#                 normalized_end_time,
-#                 entry["is_present"]
-#             ))
-
-#         # Insert or update attendance
-#         cursor.executemany("""
-#             INSERT OR REPLACE INTO Attendance (
-#                 student_id, section_id, subject_id, date, start_time, end_time, is_present
-#             ) VALUES (?, ?, ?, ?, ?, ?, ?)
-#         """, attendance_data)
-#         conn.commit()
-#         conn.close()
-#         logger.info("Attendance submitted successfully")
-#         return {"message": "Attendance submitted successfully"}
-#     except HTTPException as e:
-#         logger.error(f"HTTP error in /submit-attendance: {e.detail}")
-#         raise e
-#     except Exception as e:
-#         logger.error(f"Error submitting attendance: {str(e)}")
-#         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-
 @app.post("/submit-attendance")
 async def submit_attendance(
     timetable_id: int = Form(...),
@@ -798,80 +608,6 @@ async def submit_attendance(
         logger.error(f"Error submitting attendance: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     
-
-# @app.get("/get-attendance")
-# async def get_attendance(
-#     dept_name: Optional[str] = None,
-#     year: Optional[int] = None,
-#     section_name: Optional[str] = None,
-#     subject_code: Optional[str] = None,
-#     date: Optional[str] = None
-# ):
-#     try:
-#         conn = get_db_connection()
-#         cursor = conn.cursor()
-
-#         query = """
-#             SELECT 
-#                 a.attendance_id,
-#                 s.register_number,
-#                 s.name,
-#                 sec.section_name,
-#                 sub.subject_code,
-#                 sub.subject_name,
-#                 a.date,
-#                 a.start_time,
-#                 a.end_time,
-#                 a.is_present
-#             FROM Attendance a
-#             JOIN Students s ON a.student_id = s.student_id
-#             JOIN Sections sec ON a.section_id = sec.section_id
-#             JOIN Batches b ON sec.batch_id = b.batch_id
-#             JOIN Departments d ON b.dept_id = d.dept_id
-#             JOIN Subjects sub ON a.subject_id = sub.subject_id
-#             WHERE 1=1
-#         """
-#         params = []
-
-#         if dept_name:
-#             query += " AND d.dept_name = ?"
-#             params.append(dept_name)
-#         if year is not None:
-#             query += " AND b.year = ?"
-#             params.append(year)
-#         if section_name:
-#             query += " AND sec.section_name = ?"
-#             params.append(section_name)
-#         if subject_code:
-#             query += " AND sub.subject_code = ?"
-#             params.append(subject_code)
-#         if date:
-#             query += " AND a.date = ?"
-#             params.append(date)
-
-#         cursor.execute(query, params)
-#         results = cursor.fetchall()
-#         conn.close()
-
-#         attendance_records = [
-#             {
-#                 "attendance_id": row["attendance_id"],
-#                 "register_number": row["register_number"],
-#                 "name": row["name"],
-#                 "section_name": row["section_name"],
-#                 "subject_code": row["subject_code"],
-#                 "subject_name": row["subject_name"],
-#                 "date": row["date"],
-#                 "start_time": row["start_time"],
-#                 "end_time": row["end_time"],
-#                 "is_present": row["is_present"]
-#             }
-#             for row in results
-#         ]
-#         return {"attendance": attendance_records}
-#     except Exception as e:
-#         logger.error(f"Error in /get-attendance: {e}")
-#         raise HTTPException(status_code=500, detail=f"Error fetching attendance: {str(e)}")
 
 @app.get("/get-attendance")
 async def get_attendance(
