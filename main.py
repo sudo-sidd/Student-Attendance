@@ -71,17 +71,23 @@ class StudentResponse(BaseModel):
     section_name: str
     batch_id: int
 
+
+class AttendanceCreate(BaseModel):
+    timetable_id: int
+    register_number: str
+    is_present: bool
+
+class AttendanceUpdate(BaseModel):
+    timetable_id: int
+    register_number: str
+    is_present: bool
+
 class AttendanceEntry(BaseModel):
     register_number: str
     name: str
     is_present: int
 
 class AttendanceRequest(BaseModel):
-    # dept_name: str
-    # year: int
-    # section_name: str
-    # date: str
-    # time: str
     timetable_id: int
     attendance: List[AttendanceEntry]
 
@@ -1212,6 +1218,108 @@ async def upload_students_csv(
     except Exception as e:
         logger.error(f"Error uploading students CSV: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/timetables/{dept_name}/{year}")
+async def get_timetables(dept_name: str, year: int):
+    conn = sqlite3.connect("attendance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT timetable_id, subject_name, subject_code, date, start_time, end_time
+        FROM Timetable
+        WHERE dept_name = ? AND year = ?
+        """,
+        (dept_name, year),
+    )
+    timetables = [
+        {
+            "timetable_id": row[0],
+            "subject_name": row[1],
+            "subject_code": row[2],
+            "date": row[3],
+            "start_time": row[4],
+            "end_time": row[5],
+        }
+        for row in cursor.fetchall()
+    ]
+    conn.close()
+    return timetables
+
+@app.get("/students/{dept_name}/{year}/{section_name}")
+async def get_students(dept_name: str, year: int, section_name: str):
+    conn = sqlite3.connect("attendance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT register_number, name
+        FROM Students
+        WHERE dept_name = ? AND year = ? AND section_name = ?
+        """,
+        (dept_name, year, section_name),
+    )
+    students = [
+        {"register_number": row[0], "name": row[1]} for row in cursor.fetchall()
+    ]
+    conn.close()
+    return students
+
+@app.post("/attendance")
+async def create_attendance(attendance: AttendanceCreate):
+    conn = sqlite3.connect("attendance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO Attendance (timetable_id, register_number, is_present)
+        VALUES (?, ?, ?)
+        """,
+        (
+            attendance.timetable_id,
+            attendance.register_number,
+            attendance.is_present,
+        ),
+    )
+    attendance_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return {"attendance_id": attendance_id}
+
+@app.put("/attendance/{attendance_id}")
+async def update_attendance(attendance_id: int, attendance: AttendanceUpdate):
+    conn = sqlite3.connect("attendance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE Attendance
+        SET timetable_id = ?, register_number = ?, is_present = ?
+        WHERE attendance_id = ?
+        """,
+        (
+            attendance.timetable_id,
+            attendance.register_number,
+            attendance.is_present,
+            attendance_id,
+        ),
+    )
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    conn.commit()
+    conn.close()
+    return {"message": "Updated"}
+
+@app.delete("/attendance/{attendance_id}")
+async def delete_attendance(attendance_id: int):
+    conn = sqlite3.connect("attendance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM Attendance WHERE attendance_id = ?", (attendance_id,)
+    )
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    conn.commit()
+    conn.close()
+    return {"message": "Deleted"}
 
 if __name__ == "__main__":
     import uvicorn

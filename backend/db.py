@@ -39,17 +39,17 @@
 #             year INTEGER NOT NULL,
 #             FOREIGN KEY (dept_id) REFERENCES Departments(dept_id)
 #         );
-#         CREATE TABLE IF NOT EXISTS Timetable (
-#             timetable_id INTEGER PRIMARY KEY AUTOINCREMENT,
-#             section_id INTEGER NOT NULL,
-#             day_of_week TEXT NOT NULL,
-#             period_number INTEGER NOT NULL,
-#             start_time TEXT NOT NULL,
-#             end_time TEXT NOT NULL,
-#             subject_id INTEGER NOT NULL,
-#             FOREIGN KEY (section_id) REFERENCES Sections(section_id),
-#             FOREIGN KEY (subject_id) REFERENCES Subjects(subject_id)
-#         );
+        # CREATE TABLE IF NOT EXISTS Timetable (
+        #     timetable_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #     section_id INTEGER NOT NULL,
+        #     day_of_week TEXT NOT NULL,
+        #     period_number INTEGER NOT NULL,
+        #     start_time TEXT NOT NULL,
+        #     end_time TEXT NOT NULL,
+        #     subject_id INTEGER NOT NULL,
+        #     FOREIGN KEY (section_id) REFERENCES Sections(section_id),
+        #     FOREIGN KEY (subject_id) REFERENCES Subjects(subject_id)
+        # );
         # CREATE TABLE IF NOT EXISTS Attendance (
         #     attendance_id INTEGER PRIMARY KEY AUTOINCREMENT,
         #     student_id INTEGER NOT NULL,
