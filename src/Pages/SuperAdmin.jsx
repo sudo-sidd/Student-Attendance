@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import Header from '../components/Header';
 
 export default function SuperAdmin() {
   const [activeTab, setActiveTab] = useState('departments');
@@ -320,7 +321,9 @@ export default function SuperAdmin() {
   const tabs = ['departments', 'batches', 'sections', 'subjects', 'students', 'time-blocks'];
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <>
+    <Header />
+    <div className="min-h-[calc(100vh-28px)] bg-gray-100 p-6 mt-[26px]">
       <h1 className="text-3xl font-semibold text-gray-800 mb-6">Super Admin Panel</h1>
 
       {/* Loading and Error States */}
@@ -1198,5 +1201,6 @@ export default function SuperAdmin() {
         </div>
       )}
     </div>
+    </>
   );
 }

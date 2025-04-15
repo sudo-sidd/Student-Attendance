@@ -197,7 +197,7 @@ export default function AttendanceAssist() {
 
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-[calc(100vh-60px)] bg-gray-100">
       <Header />
 
       <main className="p-6 mt-16 max-w-2xl mx-auto">

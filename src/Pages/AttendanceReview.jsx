@@ -225,7 +225,7 @@ export default function AttendanceReview() {
     <div className="min-h-screen bg-gray-100">
       <Header />
 
-      <main className="mb-10 p-6 max-w-2xl mx-auto mt-24">
+      <main className="mb-10 p-6 max-w-6xl mx-auto mt-24">
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
         {attendance.length === 0 ? (
           <div className="bg-white rounded-lg shadow-lg p-6 text-center">

@@ -16,7 +16,7 @@ export default function Header() {
   return (
     <>
       {/* Header */}
-      <header className="fixed top-0 z-50 w-full bg-white shadow-md">
+      <header className="fixed top-0 z-50 w-full bg-white shadow-md h-24">
         <div className="flex items-center justify-between max-w-[1200px] w-[90%] mx-auto py-3">
           
           {/* Sidebar Toggle (mobile only) */}
