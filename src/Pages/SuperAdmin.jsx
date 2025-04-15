@@ -8,8 +8,10 @@ export default function SuperAdmin() {
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [students, setStudents] = useState([]);
+  const [timeBlocks, setTimeBlocks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Form states for manual adding
   const [deptName, setDeptName] = useState('');
@@ -24,6 +26,10 @@ export default function SuperAdmin() {
   const [studentRegNum, setStudentRegNum] = useState('');
   const [studentName, setStudentName] = useState('');
   const [studentSection, setStudentSection] = useState('');
+  const [timeBlockYear, setTimeBlockYear] = useState('');
+  const [timeBlockNumber, setTimeBlockNumber] = useState('');
+  const [timeBlockStartTime, setTimeBlockStartTime] = useState('');
+  const [timeBlockEndTime, setTimeBlockEndTime] = useState('');
 
   // CSV upload states
   const [csvDept, setCsvDept] = useState('');
@@ -58,7 +64,20 @@ export default function SuperAdmin() {
       }
     };
     fetchData();
+    fetchTimeBlocks();
   }, []);
+
+  const fetchTimeBlocks = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('http://localhost:8000/time-blocks');
+      setTimeBlocks(response.data);
+      setLoading(false);
+    } catch (error) {
+      setError('Failed to fetch time blocks: ' + (error.response?.data?.detail || error.message));
+      setLoading(false);
+    }
+  };
 
   // CRUD Handlers
   const handleAdd = async (e, type, payload) => {
@@ -67,13 +86,23 @@ export default function SuperAdmin() {
     setError(null);
     try {
       const response = await axios.post(`http://localhost:8000/${type}`, payload);
-      if (type === 'departments') setDepartments([...departments, response.data]);
-      if (type === 'batches') setBatches([...batches, response.data]);
-      if (type === 'sections') setSections([...sections, response.data]);
-      if (type === 'subjects') setSubjects([...subjects, response.data]);
-      if (type === 'students') setStudents([...students, response.data]);
+      
+      // Update state without changing active tab
+      if (type === 'departments') {
+        setDepartments([...departments, response.data]);
+      } else if (type === 'batches') {
+        setBatches([...batches, response.data]);
+      } else if (type === 'sections') {
+        setSections([...sections, response.data]);
+      } else if (type === 'subjects') {
+        setSubjects([...subjects, response.data]);
+      } else if (type === 'students') {
+        setStudents([...students, response.data]);
+      }
+      
+      setSuccessMessage(`${type.slice(0, -1)} added successfully`);
+      setTimeout(() => setSuccessMessage(''), 3000);
       resetForm(type);
-      alert(`${type.slice(0, -1)} added successfully`);
     } catch (error) {
       setError('Failed to add: ' + (error.response?.data?.detail || error.message));
     } finally {
@@ -81,8 +110,69 @@ export default function SuperAdmin() {
     }
   };
 
+  const handleAddTimeBlock = async (e) => {
+    e.preventDefault(); // Ensure this is present
+    try {
+      setLoading(true);
+      const response = await axios.post('http://localhost:8000/time-blocks', {
+        batch_year: parseInt(timeBlockYear),
+        block_number: parseInt(timeBlockNumber),
+        start_time: timeBlockStartTime,
+        end_time: timeBlockEndTime,
+      });
+      
+      // Add new time block directly to state
+      setTimeBlocks([...timeBlocks, response.data]);
+
+      setSuccessMessage('Time block added successfully');
+      setTimeout(() => setSuccessMessage(''), 3000);
+
+      // Reset form
+      setTimeBlockYear('');
+      setTimeBlockNumber('');
+      setTimeBlockStartTime('');
+      setTimeBlockEndTime('');
+    } catch (error) {
+      setError('Failed to add time block: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEdit = (type, data) => {
     setEditModal({ isOpen: true, type, data });
+  };
+
+  const handleEditTimeBlock = async (data) => {
+    try {
+      setLoading(true);
+      await axios.put(`http://localhost:8000/time-blocks/${data.time_block_id}`, {
+        batch_year: parseInt(data.batch_year),
+        block_number: parseInt(data.block_number),
+        start_time: data.start_time,
+        end_time: data.end_time,
+      });
+
+      // Update the state directly instead of fetching again
+      setTimeBlocks(timeBlocks.map(block => 
+        block.time_block_id === data.time_block_id
+          ? {...block, 
+             batch_year: parseInt(data.batch_year),
+             block_number: parseInt(data.block_number),
+             start_time: data.start_time,
+             end_time: data.end_time
+            }
+          : block
+      ));
+
+      setSuccessMessage('Time block updated successfully');
+      setTimeout(() => setSuccessMessage(''), 3000);
+      setEditModal({ isOpen: false, type: '', data: null });
+      setLoading(false);
+    } catch (error) {
+      setError('Failed to update time block: ' + (error.response?.data?.detail || error.message));
+      setLoading(false);
+    }
   };
 
   const handleUpdate = async (e) => {
@@ -122,9 +212,20 @@ export default function SuperAdmin() {
           section_id: data.section_id,
         });
         setStudents(students.map(s => s.register_number === data.old_reg_num ? response.data : s));
+      } else if (type === 'time-blocks') {
+        await axios.put(`http://localhost:8000/time-blocks/${data.time_block_id}`, {
+          batch_year: parseInt(data.batch_year),
+          block_number: parseInt(data.block_number),
+          start_time: data.start_time,
+          end_time: data.end_time,
+        });
+
+        // Update timeBlocks state directly
+        setTimeBlocks(timeBlocks.map(block => block.time_block_id === data.time_block_id ? { ...block, ...data } : block));
       }
+      setSuccessMessage(`${type.slice(0, -1)} updated successfully`);
+      setTimeout(() => setSuccessMessage(''), 3000);
       setEditModal({ isOpen: false, type: '', data: null });
-      alert(`${type.slice(0, -1)} updated successfully`);
     } catch (error) {
       setError('Failed to update: ' + (error.response?.data?.detail || error.message));
     } finally {
@@ -132,8 +233,11 @@ export default function SuperAdmin() {
     }
   };
 
-  const handleDelete = async (type, id) => {
-    if (!confirm(`Are you sure you want to delete this ${type.slice(0, -1)}?`)) return;
+  const handleDelete = async (type, id, e) => {
+    // Accept the event parameter and prevent default
+    if (e) e.preventDefault();
+    
+    if (!window.confirm(`Are you sure you want to delete this ${type.slice(0, -1)}?`)) return;
     setLoading(true);
     setError(null);
     try {
@@ -143,9 +247,29 @@ export default function SuperAdmin() {
       if (type === 'sections') setSections(sections.filter(s => s.section_id !== id));
       if (type === 'subjects') setSubjects(subjects.filter(s => s.subject_code !== id));
       if (type === 'students') setStudents(students.filter(s => s.register_number !== id));
-      alert(`${type.slice(0, -1)} deleted successfully`);
+      if (type === 'time-blocks') setTimeBlocks(timeBlocks.filter(b => b.time_block_id !== id));
+
+      setSuccessMessage(`${type.slice(0, -1)} deleted successfully`);
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       setError('Failed to delete: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteTimeBlock = async (id) => {
+    try {
+      setLoading(true);
+      await axios.delete(`http://localhost:8000/time-blocks/${id}`);
+
+      // Update the timeBlocks state directly rather than fetching again
+      setTimeBlocks(timeBlocks.filter(block => block.time_block_id !== id));
+
+      setSuccessMessage('Time block deleted successfully');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      setError('Failed to delete time block: ' + (error.response?.data?.detail || error.message));
     } finally {
       setLoading(false);
     }
@@ -173,7 +297,9 @@ export default function SuperAdmin() {
       setCsvDept('');
       setCsvYear('');
       setCsvFile(null);
-      alert('Students uploaded successfully');
+
+      setSuccessMessage('CSV uploaded successfully');
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       setError('Failed to upload CSV: ' + (error.response?.data?.detail || error.message));
     } finally {
@@ -188,6 +314,10 @@ export default function SuperAdmin() {
     if (type === 'subjects') { setSubjectCode(''); setSubjectName(''); setSubjectDept(''); setSubjectYear(''); }
     if (type === 'students') { setStudentRegNum(''); setStudentName(''); setStudentSection(''); }
   };
+
+  const filteredTimeBlocks = timeBlocks;
+
+  const tabs = ['departments', 'batches', 'sections', 'subjects', 'students', 'time-blocks'];
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -204,13 +334,22 @@ export default function SuperAdmin() {
         </div>
       )}
       {error && <div className="text-red-600 mb-4 text-center">{error}</div>}
+      {successMessage && (
+        <div className="fixed top-4 right-4 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-lg transition-opacity duration-500">
+          {successMessage}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-4 mb-6 border-b border-gray-200">
-        {['departments', 'batches', 'sections', 'subjects', 'students'].map((tab) => (
+        {tabs.map((tab) => (
           <button
+            type="button"
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={(e) => {
+              e.preventDefault(); // Add this to prevent default behavior
+              setActiveTab(tab);
+            }}
             className={`px-4 py-2 font-medium ${
               activeTab === tab ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-blue-600'
             }`}
@@ -255,6 +394,7 @@ export default function SuperAdmin() {
                     <td className="p-3">{dept.dept_name}</td>
                     <td className="p-3">
                       <button
+                        type="button"
                         onClick={() => handleEdit('departments', { ...dept, old_name: dept.dept_name })}
                         className="px-3 py-1 bg-yellow-500 text-white rounded mr-2 hover:bg-yellow-600 disabled:bg-gray-400"
                         disabled={loading}
@@ -262,7 +402,8 @@ export default function SuperAdmin() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete('departments', dept.dept_name)}
+                        type="button"
+                        onClick={(e) => handleDelete('departments', dept.dept_name, e)}
                         className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
                         disabled={loading}
                       >
@@ -328,6 +469,7 @@ export default function SuperAdmin() {
                     <td className="p-3">{batch.year}</td>
                     <td className="p-3">
                       <button
+                        type="button"
                         onClick={() => handleEdit('batches', batch)}
                         className="px-3 py-1 bg-yellow-500 text-white rounded mr-2 hover:bg-yellow-600 disabled:bg-gray-400"
                         disabled={loading}
@@ -335,7 +477,8 @@ export default function SuperAdmin() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete('batches', batch.batch_id)}
+                        type="button"
+                        onClick={(e) => handleDelete('batches', batch.batch_id, e)}
                         className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
                         disabled={loading}
                       >
@@ -403,6 +546,7 @@ export default function SuperAdmin() {
                     <td className="p-3">{section.section_name}</td>
                     <td className="p-3">
                       <button
+                        type="button"
                         onClick={() => handleEdit('sections', section)}
                         className="px-3 py-1 bg-yellow-500 text-white rounded mr-2 hover:bg-yellow-600 disabled:bg-gray-400"
                         disabled={loading}
@@ -410,7 +554,8 @@ export default function SuperAdmin() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete('sections', section.section_id)}
+                        type="button"
+                        onClick={(e) => handleDelete('sections', section.section_id, e)}
                         className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
                         disabled={loading}
                       >
@@ -502,6 +647,7 @@ export default function SuperAdmin() {
                     <td className="p-3">{subject.year}</td>
                     <td className="p-3">
                       <button
+                        type="button"
                         onClick={() => handleEdit('subjects', { ...subject, old_code: subject.subject_code })}
                         className="px-3 py-1 bg-yellow-500 text-white rounded mr-2 hover:bg-yellow-600 disabled:bg-gray-400"
                         disabled={loading}
@@ -509,7 +655,8 @@ export default function SuperAdmin() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete('subjects', subject.subject_code)}
+                        type="button"
+                        onClick={(e) => handleDelete('subjects', subject.subject_code, e)}
                         className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
                         disabled={loading}
                       >
@@ -657,6 +804,7 @@ export default function SuperAdmin() {
                     <td className="p-3">{student.section_name} (Batch {student.batch_id})</td>
                     <td className="p-3">
                       <button
+                        type="button"
                         onClick={() => handleEdit('students', { ...student, old_reg_num: student.register_number })}
                         className="px-3 py-1 bg-yellow-500 text-white rounded mr-2 hover:bg-yellow-600 disabled:bg-gray-400"
                         disabled={loading}
@@ -664,7 +812,123 @@ export default function SuperAdmin() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete('students', student.register_number)}
+                        type="button"
+                        onClick={(e) => handleDelete('students', student.register_number, e)}
+                        className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
+                        disabled={loading}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {activeTab === 'time-blocks' && (
+          <>
+            {/* Manual Add Form */}
+            <form onSubmit={handleAddTimeBlock} className="mb-6">
+              <div className="flex gap-4 items-end flex-wrap">
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-gray-700 font-medium mb-2">Batch Year</label>
+                  <select
+                    value={timeBlockYear}
+                    onChange={(e) => setTimeBlockYear(e.target.value)}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                    disabled={loading}
+                  >
+                    <option value="">Select Year</option>
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-gray-700 font-medium mb-2">Period Number</label>
+                  <input
+                    type="number"
+                    value={timeBlockNumber}
+                    onChange={(e) => setTimeBlockNumber(e.target.value)}
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                    min="1"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-gray-700 font-medium mb-2">Start Time (HH:MM)</label>
+                  <input
+                    type="text"
+                    value={timeBlockStartTime}
+                    onChange={(e) => setTimeBlockStartTime(e.target.value)}
+                    placeholder="e.g. 8:30"
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                    pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                    title="Time format: HH:MM (24-hour)"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-gray-700 font-medium mb-2">End Time (HH:MM)</label>
+                  <input
+                    type="text"
+                    value={timeBlockEndTime}
+                    onChange={(e) => setTimeBlockEndTime(e.target.value)}
+                    placeholder="e.g. 9:15"
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                    pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                    title="Time format: HH:MM (24-hour)"
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                    disabled={loading}
+                  >
+                    Add Time Block
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {/* Time Blocks Table */}
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-200">
+                  <th className="p-3 text-left text-gray-700">Year</th>
+                  <th className="p-3 text-left text-gray-700">Period</th>
+                  <th className="p-3 text-left text-gray-700">Start Time</th>
+                  <th className="p-3 text-left text-gray-700">End Time</th>
+                  <th className="p-3 text-left text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTimeBlocks.map((block) => (
+                  <tr key={block.time_block_id} className="border-b">
+                    <td className="p-3">{block.batch_year}</td>
+                    <td className="p-3">{block.block_number}</td>
+                    <td className="p-3">{block.start_time}</td>
+                    <td className="p-3">{block.end_time}</td>
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit('time-blocks', block)}
+                        className="px-3 py-1 bg-yellow-500 text-white rounded mr-2 hover:bg-yellow-600 disabled:bg-gray-400"
+                        disabled={loading}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteTimeBlock(block.time_block_id, e)}
                         className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
                         disabled={loading}
                       >
@@ -857,6 +1121,62 @@ export default function SuperAdmin() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                </>
+              )}
+              {editModal.type === 'time-blocks' && (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-gray-700 font-medium mb-2">Batch Year</label>
+                    <select
+                      value={editModal.data.batch_year}
+                      onChange={(e) => setEditModal({ ...editModal, data: { ...editModal.data, batch_year: e.target.value } })}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                      disabled={loading}
+                    >
+                      <option value="1">1st Year</option>
+                      <option value="2">2nd Year</option>
+                      <option value="3">3rd Year</option>
+                    </select>
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-gray-700 font-medium mb-2">Period Number</label>
+                    <input
+                      type="number"
+                      value={editModal.data.block_number}
+                      onChange={(e) => setEditModal({ ...editModal, data: { ...editModal.data, block_number: e.target.value } })}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                      min="1"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-gray-700 font-medium mb-2">Start Time</label>
+                    <input
+                      type="text"
+                      value={editModal.data.start_time}
+                      onChange={(e) => setEditModal({ ...editModal, data: { ...editModal.data, start_time: e.target.value } })}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                      pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                      title="Time format: HH:MM (24-hour)"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-gray-700 font-medium mb-2">End Time</label>
+                    <input
+                      type="text"
+                      value={editModal.data.end_time}
+                      onChange={(e) => setEditModal({ ...editModal, data: { ...editModal.data, end_time: e.target.value } })}
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                      pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$"
+                      title="Time format: HH:MM (24-hour)"
+                      disabled={loading}
+                    />
                   </div>
                 </>
               )}

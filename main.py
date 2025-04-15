@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 import logging
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, time
 import pandas as pd
 import io
 import torch
@@ -71,7 +71,6 @@ class StudentResponse(BaseModel):
     section_name: str
     batch_id: int
 
-
 class AttendanceCreate(BaseModel):
     timetable_id: int
     register_number: str
@@ -121,7 +120,19 @@ class TimetableSlotCreate(BaseModel):
     date: str
     start_time: str
     end_time: str
-    day_of_week: str
+
+class TimeBlockCreate(BaseModel):
+    batch_year: int
+    block_number: int
+    start_time: str
+    end_time: str
+
+class TimeBlockResponse(BaseModel):
+    time_block_id: int
+    batch_year: int
+    block_number: int
+    start_time: str
+    end_time: str
 
 # Database Connection
 def get_db_connection():
@@ -273,6 +284,237 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Error loading YOLO model: {e}")
         raise RuntimeError(f"Failed to load YOLO model: {e}")
+    
+    # Initialize time blocks during startup
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if time blocks already exist
+        cursor.execute("SELECT COUNT(*) FROM TimeBlocks")
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            # Define time blocks for 2nd year (1-hour periods)
+            second_year_blocks = [
+                (2, 1, "8:30", "9:30"),
+                (2, 2, "9:30", "10:30"),
+                (2, 3, "10:50", "11:50"),
+                (2, 4, "11:50", "12:50"),
+                (2, 5, "12:50", "1:40"),
+                (2, 6, "1:40", "2:40"),
+                (2, 7, "2:40", "3:25"),
+                (2, 8, "3:45", "4:30"),
+            ]
+            
+            # Define time blocks for 1st and 3rd years (45-minute periods)
+            other_years_blocks = [
+                (1, 1, "8:30", "9:15"),
+                (1, 2, "9:15", "10:00"),
+                (1, 3, "10:00", "10:45"),
+                (1, 4, "11:05", "11:50"),
+                (1, 5, "11:50", "12:35"),
+                (1, 6, "1:20", "2:05"),
+                (1, 7, "2:05", "2:50"),
+                (1, 8, "3:05", "3:50"),
+                (1, 9, "3:50", "4:35"),
+                (3, 1, "8:30", "9:15"),
+                (3, 2, "9:15", "10:00"),
+                (3, 3, "10:00", "10:45"),
+                (3, 4, "11:05", "11:50"),
+                (3, 5, "11:50", "12:35"),
+                (3, 6, "1:20", "2:05"),
+                (3, 7, "2:05", "2:50"),
+                (3, 8, "3:05", "3:50"),
+                (3, 9, "3:50", "4:35"),
+            ]
+            
+            # Insert the blocks
+            cursor.executemany(
+                "INSERT INTO TimeBlocks (batch_year, block_number, start_time, end_time) VALUES (?, ?, ?, ?)",
+                second_year_blocks + other_years_blocks
+            )
+            
+            conn.commit()
+            logger.info("Time blocks initialized during startup")
+        else:
+            logger.info("Time blocks already exist, no initialization needed")
+        
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error initializing time blocks: {e}")
+
+# Function to initialize the default time blocks
+@app.post("/initialize-time-blocks")
+async def initialize_time_blocks():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # First, check if time blocks already exist
+    cursor.execute("SELECT COUNT(*) FROM TimeBlocks")
+    count = cursor.fetchone()[0]
+    
+    if count > 0:
+        conn.close()
+        return {"message": "Time blocks already initialized"}
+    
+    # Define time blocks for 2nd year (1-hour periods)
+    second_year_blocks = [
+        (2, 1, "8:30", "9:30"),
+        (2, 2, "9:30", "10:30"),
+        (2, 3, "10:50", "11:50"),
+        (2, 4, "11:50", "12:50"),
+        (2, 5, "12:50", "1:40"),
+        (2, 6, "1:40", "2:40"),
+        (2, 7, "2:40", "3:25"),
+        (2, 8, "3:45", "4:30"),
+    ]
+    
+    # Define time blocks for 1st and 3rd years (45-minute periods)
+    other_years_blocks = [
+        (1, 1, "8:30", "9:15"),
+        (1, 2, "9:15", "10:00"),
+        (1, 3, "10:00", "10:45"),
+        (1, 4, "11:05", "11:50"),
+        (1, 5, "11:50", "12:35"),
+        (1, 6, "1:20", "2:05"),
+        (1, 7, "2:05", "2:50"),
+        (1, 8, "3:05", "3:50"),
+        (1, 9, "3:50", "4:35"),
+        (3, 1, "8:30", "9:15"),
+        (3, 2, "9:15", "10:00"),
+        (3, 3, "10:00", "10:45"),
+        (3, 4, "11:05", "11:50"),
+        (3, 5, "11:50", "12:35"),
+        (3, 6, "1:20", "2:05"),
+        (3, 7, "2:05", "2:50"),
+        (3, 8, "3:05", "3:50"),
+        (3, 9, "3:50", "4:35"),
+    ]
+    
+    # Insert the blocks without day_of_week
+    cursor.executemany(
+        "INSERT INTO TimeBlocks (batch_year, block_number, start_time, end_time) VALUES (?, ?, ?, ?)",
+        second_year_blocks + other_years_blocks
+    )
+    
+    conn.commit()
+    conn.close()
+    return {"message": "Time blocks initialized successfully"}
+
+# Get time blocks for a specific batch year
+@app.get("/time-blocks/{batch_year}", response_model=List[TimeBlockResponse])
+async def get_time_blocks(batch_year: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    query = "SELECT * FROM TimeBlocks WHERE batch_year = ?"
+    params = [batch_year]
+    
+    cursor.execute(query, params)
+    blocks = cursor.fetchall()
+    conn.close()
+    
+    return [dict(block) for block in blocks]
+
+# Get all time blocks
+@app.get("/time-blocks", response_model=List[TimeBlockResponse])
+async def get_all_time_blocks():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM TimeBlocks ORDER BY batch_year, block_number")
+    blocks = cursor.fetchall()
+    conn.close()
+    
+    return [dict(block) for block in blocks]
+
+# Find the current time block for a batch
+@app.get("/current-time-block/{batch_year}")
+async def get_current_time_block(batch_year: int):
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Find the block where current time falls between start and end time
+    cursor.execute(
+        """
+        SELECT * FROM TimeBlocks 
+        WHERE batch_year = ? 
+        AND time(?) >= time(start_time) 
+        AND time(?) < time(end_time)
+        """,
+        (batch_year, current_time, current_time)
+    )
+    
+    block = cursor.fetchone()
+    conn.close()
+    
+    if block:
+        return dict(block)
+    else:
+        return {"message": "No active time block found for current time"}
+
+# Admin endpoints to manage time blocks
+@app.post("/time-blocks", response_model=TimeBlockResponse)
+async def create_time_block(block: TimeBlockCreate):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        INSERT INTO TimeBlocks (batch_year, block_number, start_time, end_time)
+        VALUES (?, ?, ?, ?)
+        """,
+        (block.batch_year, block.block_number, block.start_time, block.end_time)
+    )
+    
+    block_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return {**block.dict(), "time_block_id": block_id}
+
+@app.put("/time-blocks/{time_block_id}", response_model=TimeBlockResponse)
+async def update_time_block(time_block_id: int, block: TimeBlockCreate):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        """
+        UPDATE TimeBlocks
+        SET batch_year = ?, block_number = ?, start_time = ?, end_time = ?
+        WHERE time_block_id = ?
+        """,
+        (block.batch_year, block.block_number, block.start_time, block.end_time, time_block_id)
+    )
+    
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Time block not found")
+    
+    conn.commit()
+    conn.close()
+    
+    return {**block.dict(), "time_block_id": time_block_id}
+
+@app.delete("/time-blocks/{time_block_id}")
+async def delete_time_block(time_block_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("DELETE FROM TimeBlocks WHERE time_block_id = ?", (time_block_id,))
+    
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Time block not found")
+    
+    conn.commit()
+    conn.close()
+    
+    return {"message": "Time block deleted successfully"}
 
 # Normal User Endpoints
 @app.get("/departments", response_model=List[DepartmentResponse])
@@ -417,11 +659,10 @@ async def process_images(
         if existing_slot:
             timetable_id = existing_slot["timetable_id"]
         else:
-            day_of_week = datetime.strptime(date, "%m/%d/%Y").strftime("%A")
             cursor.execute("""
-                INSERT INTO Timetable (section_id, subject_id, date, start_time, end_time, day_of_week)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (section_id, subject_id, date, start_time, end_time, day_of_week))
+                INSERT INTO Timetable (section_id, subject_id, date, start_time, end_time)
+                VALUES (?, ?, ?, ?, ?)
+            """, (section_id, subject_id, date, start_time, end_time))
             timetable_id = cursor.lastrowid
             conn.commit()
 
@@ -538,15 +779,15 @@ async def create_timetable_slot(slot: TimetableSlotCreate):
             conn.close()
             return {"timetable_id": existing_slot["timetable_id"]}
 
-        # Create new slot
         cursor.execute("""
-            INSERT INTO Timetable (section_id, subject_id, date, start_time, end_time, day_of_week)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (section_id, subject_id, slot.date, slot.start_time, slot.end_time, slot.day_of_week))
+            INSERT INTO Timetable (section_id, subject_id, date, start_time, end_time)
+            VALUES (?, ?, ?, ?, ?)
+        """, (section_id, subject_id, slot.date, slot.start_time, slot.end_time))
         timetable_id = cursor.lastrowid
         conn.commit()
         conn.close()
         logger.info(f"Created timetable slot: timetable_id={timetable_id}")
+        
         return {"timetable_id": timetable_id}
     except Exception as e:
         logger.error(f"Error creating timetable slot: {e}")

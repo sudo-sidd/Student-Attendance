@@ -8,6 +8,8 @@ const AttendanceForm = () => {
   const [years, setYears] = useState([]);
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [timeBlocks, setTimeBlocks] = useState([]);
+  const [selectedTimeBlock, setSelectedTimeBlock] = useState(null);
   const [formData, setFormData] = useState({
     dept_name: "",
     year: "",
@@ -16,27 +18,34 @@ const AttendanceForm = () => {
     date: "",
     start_time: "",
     end_time: "",
-    day_of_week: "",
+    time_block_id: "",
   });
   const [error, setError] = useState(null);
   const [currentSlide, setCurrentSlide] = useState(1); // Track slide (1 or 2)
   const navigate = useNavigate();
 
+  // Helper to convert time string (HH:MM) to minutes
+  const convertTimeStringToMinutes = (timeString) => {
+    // Handle different time formats
+    let [hours, minutes] = timeString.split(":");
+    
+    // Convert 12-hour format to 24-hour format if needed
+    if (timeString.toLowerCase().includes("pm") && parseInt(hours) < 12) {
+      hours = parseInt(hours) + 12;
+    } else if (timeString.toLowerCase().includes("am") && parseInt(hours) === 12) {
+      hours = 0;
+    }
+    
+    // Clean up hours and minutes to make sure they are numbers
+    hours = parseInt(hours);
+    minutes = parseInt(minutes) || 0;
+    
+    return hours * 60 + minutes;
+  };
+
   // Set current date and time on mount
   useEffect(() => {
     const now = new Date();
-    const startTime = now.toLocaleTimeString("en-US", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const endTimeObj = new Date(now.getTime() + 60 * 60 * 1000);
-    const endTime = endTimeObj.toLocaleTimeString("en-US", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const dayOfWeek = now.toLocaleString("en-US", { weekday: "long" });
 
     setFormData((prev) => ({
       ...prev,
@@ -47,9 +56,6 @@ const AttendanceForm = () => {
           year: "numeric",
         })
         .replace(/\//g, "/"),
-      start_time: startTime,
-      end_time: endTime,
-      day_of_week: dayOfWeek,
     }));
 
     axios
@@ -119,13 +125,98 @@ const AttendanceForm = () => {
     setError(null);
   };
 
+  const handleTimeBlockChange = (e) => {
+    const blockId = parseInt(e.target.value);
+    const block = timeBlocks.find((b) => b.time_block_id === blockId);
+
+    if (block) {
+      setSelectedTimeBlock(block);
+      setFormData((prev) => ({
+        ...prev,
+        start_time: block.start_time,
+        end_time: block.end_time,
+        time_block_id: block.time_block_id,
+      }));
+    }
+  };
+
+  // Modify the handleNext function to ensure time blocks are loaded and selected
   const handleNext = () => {
     if (!formData.dept_name || !formData.year || !formData.section_name) {
       setError("Please fill all class details");
       return;
     }
-    setCurrentSlide(2);
-    setError(null);
+    
+    // When moving to next slide, ensure we have time blocks loaded
+    const batchYear = parseInt(formData.year);
+    
+    axios
+      .get(`http://localhost:8000/time-blocks/${batchYear}`)
+      .then((response) => {
+        setTimeBlocks(response.data);
+        
+        // Get current time to find the appropriate time block
+        const now = new Date();
+        const currentTime = now.toLocaleTimeString("en-US", {
+          hour: "2-digit", 
+          minute: "2-digit",
+          hour12: false
+        });
+        
+        // Sort time blocks to ensure we're checking them in chronological order
+        const sortedTimeBlocks = [...response.data].sort((a, b) => {
+          return (
+            convertTimeStringToMinutes(a.start_time) -
+            convertTimeStringToMinutes(b.start_time)
+          );
+        });
+        
+        // Find the current active block based on the current time
+        const currentBlock = sortedTimeBlocks.find((block) => {
+          const startMinutes = convertTimeStringToMinutes(block.start_time);
+          const endMinutes = convertTimeStringToMinutes(block.end_time);
+          const currentMinutes = convertTimeStringToMinutes(currentTime);
+          
+          return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+        });
+        
+        if (currentBlock) {
+          // Found a current time block
+          setSelectedTimeBlock(currentBlock);
+          setFormData((prev) => ({
+            ...prev,
+            start_time: currentBlock.start_time,
+            end_time: currentBlock.end_time,
+            time_block_id: currentBlock.time_block_id,
+          }));
+        } else {
+          // If no current time block found, find the next upcoming block
+          const upcomingBlock = sortedTimeBlocks.find(block => {
+            return convertTimeStringToMinutes(block.start_time) > convertTimeStringToMinutes(currentTime);
+          });
+          
+          // If no upcoming block, use the first time block
+          const blockToUse = upcomingBlock || (sortedTimeBlocks.length > 0 ? sortedTimeBlocks[0] : null);
+          
+          if (blockToUse) {
+            setSelectedTimeBlock(blockToUse);
+            setFormData((prev) => ({
+              ...prev,
+              start_time: blockToUse.start_time,
+              end_time: blockToUse.end_time,
+              time_block_id: blockToUse.time_block_id,
+            }));
+          }
+        }
+        
+        // Now proceed to next slide
+        setCurrentSlide(2);
+        setError(null);
+      })
+      .catch((error) => {
+        console.error("Error fetching time blocks:", error);
+        setError("Failed to load time blocks for selected year");
+      });
   };
 
   const handleBack = () => {
@@ -143,7 +234,7 @@ const AttendanceForm = () => {
       !formData.date ||
       !formData.start_time ||
       !formData.end_time ||
-      !formData.day_of_week
+      !formData.time_block_id
     ) {
       setError("Please fill all required fields");
       return;
@@ -160,7 +251,7 @@ const AttendanceForm = () => {
           date: formData.date,
           start_time: formData.start_time,
           end_time: formData.end_time,
-          day_of_week: formData.day_of_week,
+          time_block_id: formData.time_block_id,
         }
       );
 
@@ -179,6 +270,57 @@ const AttendanceForm = () => {
 
   const handleViewReport = () => {
     navigate("/report");
+  };
+
+  const renderTimeBlockSelector = () => {
+    if (!formData.year || timeBlocks.length === 0) {
+      return (
+        <div className="text-gray-500 italic">
+          Select a batch year to see available time blocks
+        </div>
+      );
+    }
+
+    return (
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-600">
+          Period / Time Block
+        </label>
+        <select
+          value={selectedTimeBlock?.time_block_id || ""}
+          onChange={handleTimeBlockChange}
+          className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          required
+        >
+          <option value="">Select Time Block</option>
+          {timeBlocks.map((block) => (
+            <option 
+              key={block.time_block_id} 
+              value={block.time_block_id}
+              className={
+                block.time_block_id === selectedTimeBlock?.time_block_id
+                  ? "font-bold text-blue-600"
+                  : ""
+              }
+            >
+              Period {block.block_number}: {block.start_time} - {block.end_time}
+              {block.time_block_id === selectedTimeBlock?.time_block_id ? " (Current)" : ""}
+            </option>
+          ))}
+        </select>
+        
+        {selectedTimeBlock && (
+          <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <div className="text-blue-800 font-medium">
+              Currently selected period: {selectedTimeBlock.block_number}
+            </div>
+            <div className="text-blue-600 text-sm">
+              Time: {selectedTimeBlock.start_time} - {selectedTimeBlock.end_time}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -203,7 +345,9 @@ const AttendanceForm = () => {
               </div>
               <span
                 className={`ml-2 text-sm ${
-                  currentSlide === 1 ? "text-gray-800 font-medium" : "text-gray-500"
+                  currentSlide === 1
+                    ? "text-gray-800 font-medium"
+                    : "text-gray-500"
                 }`}
               >
                 Class Details
@@ -220,7 +364,9 @@ const AttendanceForm = () => {
               </div>
               <span
                 className={`ml-2 text-sm ${
-                  currentSlide === 2 ? "text-gray-800 font-medium" : "text-gray-500"
+                  currentSlide === 2
+                    ? "text-gray-800 font-medium"
+                    : "text-gray-500"
                 }`}
               >
                 Subject & Schedule
@@ -347,71 +493,65 @@ const AttendanceForm = () => {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    Date
-                  </label>
-                  <div className="mt-1 relative">
-                    <input
-                      type="text"
-                      name="date"
-                      value={formData.date}
-                      className="block w-full border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-500 cursor-not-allowed"
-                      readOnly
-                    />
-                    <Calendar
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
+
+                {/* Current Period Information */}
+                {selectedTimeBlock && (
+                  <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-1">Current Period</h3>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-gray-800">
+                          Period {selectedTimeBlock.block_number} 
+                        </p>
+                        <p className="text-gray-800">
+                          {selectedTimeBlock.start_time} - {selectedTimeBlock.end_time}
+                        </p>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        Automatically selected based on current time
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    Start Time
-                  </label>
-                  <div className="mt-1 relative">
-                    <input
-                      type="text"
-                      name="start_time"
-                      value={formData.start_time}
-                      className="block w-full border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-500 cursor-not-allowed"
-                      readOnly
-                    />
-                    <Clock
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
+                )}
+
+                {/* Time inputs (read-only) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">
+                      Start Time
+                    </label>
+                    <div className="mt-1 relative">
+                      <input
+                        type="text"
+                        name="start_time"
+                        value={formData.start_time}
+                        className="block w-full border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-700"
+                        readOnly
+                      />
+                      <Clock
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                        size={20}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    End Time
-                  </label>
-                  <div className="mt-1 relative">
-                    <input
-                      type="text"
-                      name="end_time"
-                      value={formData.end_time}
-                      className="block w-full border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-500 cursor-not-allowed"
-                      readOnly
-                    />
-                    <Clock
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                      size={20}
-                    />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">
+                      End Time
+                    </label>
+                    <div className="mt-1 relative">
+                      <input
+                        type="text"
+                        name="end_time"
+                        value={formData.end_time}
+                        className="block w-full border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-700"
+                        readOnly
+                      />
+                      <Clock
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                        size={20}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    Day of Week
-                  </label>
-                  <input
-                    type="text"
-                    name="day_of_week"
-                    value={formData.day_of_week}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-500 cursor-not-allowed"
-                    readOnly
-                  />
                 </div>
               </div>
               <div className="mt-6 flex gap-4">
