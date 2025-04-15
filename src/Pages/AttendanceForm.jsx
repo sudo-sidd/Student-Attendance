@@ -277,276 +277,18 @@ const AttendanceForm = () => {
     navigate("/admin");
   };
 
-  const renderTimeBlockSelector = () => {
-    if (!formData.year || timeBlocks.length === 0) {
-      return (
-        <div className="text-gray-500 italic">
-          Select a batch year to see available time blocks
-        </div>
-      );
-    }
-
-    return (
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-600">
-          Period / Time Block
-        </label>
-        <select
-          value={selectedTimeBlock?.time_block_id || ""}
-          onChange={handleTimeBlockChange}
-          className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-          required
-        >
-          <option value="">Select Time Block</option>
-          {timeBlocks.map((block) => (
-            <option
-              key={block.time_block_id}
-              value={block.time_block_id}
-              className={
-                block.time_block_id === selectedTimeBlock?.time_block_id
-                  ? "font-bold text-blue-600"
-                  : ""
-              }
-            >
-              Period {block.block_number}: {block.start_time} - {block.end_time}
-              {block.time_block_id === selectedTimeBlock?.time_block_id ? " (Current)" : ""}
-            </option>
-          ))}
-        </select>
-
-        {selectedTimeBlock && (
-          <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-            <div className="text-blue-800 font-medium">
-              Currently selected period: {selectedTimeBlock.block_number}
-            </div>
-            <div className="text-blue-600 text-sm">
-              Time: {selectedTimeBlock.start_time} - {selectedTimeBlock.end_time}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <>
-    <Header />
-    <div className="flex-grow pt-24 pb-24 min-h-screen bg-blue-50 flex items-center justify-center p-4 mt-2 ">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg">
-        <div className="flex items-center justify-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">
-            Attendance System
-          </h1>
-        </div>
-
-        {/* Step Indicator */}
-        <div className="flex justify-center mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
-                  currentSlide === 1 ? "bg-blue-600" : "bg-gray-300"
-                }`}
-              >
-                1
-              </div>
-              <span
-                className={`ml-2 text-sm ${
-                  currentSlide === 1
-                    ? "text-gray-800 font-medium"
-                    : "text-gray-500"
-                }`}
-              >
-                Class Details
-              </span>
-            </div>
-            <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
-            <div className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${
-                  currentSlide === 2 ? "bg-blue-600" : "bg-gray-300"
-                }`}
-              >
-                2
-              </div>
-              <span
-                className={`ml-2 text-sm ${
-                  currentSlide === 2
-                    ? "text-gray-800 font-medium"
-                    : "text-gray-500"
-                }`}
-              >
-                Subject & Schedule
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Slide 1: Class Details */}
-          {currentSlide === 1 && (
-            <div className="animate-slideIn">
-              <h2 className="text-lg font-semibold text-gray-700 mb-4">
-                Class Details
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    Department
-                  </label>
-                  <select
-                    name="dept_name"
-                    value={formData.dept_name}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    required
-                  >
-                    <option value="">Select Department</option>
-                    {departments.map((dept) => (
-                      <option key={dept.dept_name} value={dept.dept_name}>
-                        {dept.dept_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    Year
-                  </label>
-                  <select
-                    name="year"
-                    value={formData.year}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    required
-                  >
-                    <option value="">Select Year</option>
-                    {years.map((y) => (
-                      <option key={y.year} value={y.year}>
-                        {y.year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    Section
-                  </label>
-                  <select
-                    name="section_name"
-                    value={formData.section_name}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    required
-                  >
-                    <option value="">Select Section</option>
-                    {sections.map((s) => (
-                      <option key={s.section_id} value={s.section_name}>
-                        {s.section_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-6 flex gap-4">
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition flex items-center justify-center gap-2"
-                >
-                  Next <ArrowRight size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleViewReport}
-                  className="flex-1 bg-gray-600 text-white py-3 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition flex items-center justify-center gap-2"
-                >
-                  <FileText size={18} />
-                  View Report
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Slide 2: Subject & Schedule */}
-          {currentSlide === 2 && (
-            <div className="animate-slideIn">
-              <h2 className="text-lg font-semibold text-gray-700 mb-4">
-                Subject & Schedule
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">
-                    Subject
-                  </label>
-                  <select
-                    name="subject_code"
-                    value={formData.subject_code}
-                    onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
-                    required
-                  >
-                    <option value="">Select Subject</option>
-                    {subjects.map((sub) => (
-                      <option key={sub.subject_code} value={sub.subject_code}>
-                        {sub.subject_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Current Period Information */}
-                {selectedTimeBlock && (
-                  <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-1">Current Period</h3>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-800">
-                          Period {selectedTimeBlock.block_number} 
-                        </p>
-                        <p className="text-gray-800">
-                          {selectedTimeBlock.start_time} - {selectedTimeBlock.end_time}
-                        </p>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Automatically selected based on current time
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Time inputs (read-only) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <header className="fixed top-0 w-full bg-white flex justify-center items-center border-b-2 border-none">
-        <div className="flex items-center w-[90%] max-w-[1200px] justify-between">
-          <div className="text-center">
-            <img
-              src="public/image.png"
-              alt="NBA Accreditation"
-              className="h-20 mx-auto mb-2"
-            />
-          </div>
-          <div className="text-center flex-1 px-5">
-            <h1 className="text-2xl text-green-800 font-bold mb-2">
-              SRI SHAKTHI INSTITUTE OF ENGINEERING AND TECHNOLOGY
-            </h1>
-            <p className="text-sm text-gray-700 font-semibold"></p>
-          </div>
-        </div>
-      </header>
-      <div className="flex-grow pt-24 pb-24 min-h-screen bg-blue-50 flex items-center justify-center p-4">
+      <Header />
+      <div className="mt-3 flex-grow pt-24 pb-24 min-h-screen bg-blue-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg">
           <div className="flex items-center justify-center mb-6">
             <h1 className="text-3xl font-bold text-gray-800">
               Attendance System
             </h1>
           </div>
+
+          {/* Step Indicator */}
           <div className="flex justify-center mb-6">
             <div className="flex items-center gap-4">
               <div className="flex items-center">
@@ -588,12 +330,15 @@ const AttendanceForm = () => {
               </div>
             </div>
           </div>
+
           {error && (
             <div className="mb-6 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
               {error}
             </div>
           )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Slide 1: Class Details */}
             {currentSlide === 1 && (
               <div className="animate-slideIn">
                 <h2 className="text-lg font-semibold text-gray-700 mb-4">
@@ -677,6 +422,8 @@ const AttendanceForm = () => {
                 </div>
               </div>
             )}
+
+            {/* Slide 2: Subject & Schedule */}
             {currentSlide === 2 && (
               <div className="animate-slideIn">
                 <h2 className="text-lg font-semibold text-gray-700 mb-4">
@@ -702,6 +449,8 @@ const AttendanceForm = () => {
                       ))}
                     </select>
                   </div>
+
+                  {/* Current Period Information */}
                   {selectedTimeBlock && (
                     <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg">
                       <h3 className="text-lg font-semibold text-blue-800 mb-1">
@@ -722,6 +471,7 @@ const AttendanceForm = () => {
                       </div>
                     </div>
                   )}
+
                   <div>
                     <label className="block text-sm font-medium text-gray-600">
                       Date
@@ -741,6 +491,7 @@ const AttendanceForm = () => {
                       />
                     </div>
                   </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-600">
