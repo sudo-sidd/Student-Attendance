@@ -1,21 +1,38 @@
-import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, X, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
-import axios from 'axios';
+import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  Check,
+  X,
+  Edit2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import axios from "axios";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
 
 export default function AttendanceReview() {
   const location = useLocation();
   const navigate = useNavigate();
-  const attendanceDataFromStorage = JSON.parse(sessionStorage.getItem('attendanceData') || '{}');
-  const { attendanceData = attendanceDataFromStorage.attendance || [], images_base64 = attendanceDataFromStorage.images_base64 || [], formData = attendanceDataFromStorage || {} } = location.state || {};
-  
+  const attendanceDataFromStorage = JSON.parse(
+    sessionStorage.getItem("attendanceData") || "{}"
+  );
+  const {
+    attendanceData = attendanceDataFromStorage.attendance || [],
+    images_base64 = attendanceDataFromStorage.images_base64 || [],
+    formData = attendanceDataFromStorage || {},
+  } = location.state || {};
+
   const [attendance, setAttendance] = useState(attendanceData);
   const [isEditing, setIsEditing] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [error, setError] = useState(null);
 
-  console.log('AttendanceReview images_base64:', images_base64);
-  console.log('AttendanceReview formData:', formData);
+  const [previewImage, setPreviewImage] = useState(null);
+
+  console.log("AttendanceReview images_base64:", images_base64);
+  console.log("AttendanceReview formData:", formData);
 
   const handleTogglePresence = (register_number) => {
     if (!isEditing) return;
@@ -133,7 +150,7 @@ export default function AttendanceReview() {
 
   const handleSaveAttendance = async () => {
     setError(null);
-  
+
     // Validate attendance
     if (!attendance.length) {
       const errorMsg = "No attendance data to submit";
@@ -142,14 +159,20 @@ export default function AttendanceReview() {
       return;
     }
     for (const entry of attendance) {
-      if (!entry.register_number || !entry.name || typeof entry.is_present !== "number") {
-        const errorMsg = `Invalid attendance entry for ${entry.register_number || "unknown"}`;
+      if (
+        !entry.register_number ||
+        !entry.name ||
+        typeof entry.is_present !== "number"
+      ) {
+        const errorMsg = `Invalid attendance entry for ${
+          entry.register_number || "unknown"
+        }`;
         setError(errorMsg);
         alert(errorMsg);
         return;
       }
     }
-  
+
     const formDataToSend = new FormData();
     formDataToSend.append("timetable_id", formData.timetable_id);
     const attendanceData = attendance.map((entry) => ({
@@ -158,9 +181,12 @@ export default function AttendanceReview() {
       is_present: entry.is_present,
     }));
     formDataToSend.append("attendance", JSON.stringify(attendanceData));
-  
+
     try {
-      await axios.post("http://localhost:8000/submit-attendance", formDataToSend);
+      await axios.post(
+        "http://localhost:8000/submit-attendance",
+        formDataToSend
+      );
       alert("Attendance saved successfully!");
       setIsEditing(false);
       sessionStorage.removeItem("attendanceForm");
@@ -168,7 +194,8 @@ export default function AttendanceReview() {
       navigate("/attendance-assist");
     } catch (error) {
       console.error("Error saving attendance:", error);
-      const errorMsg = error.response?.data?.detail || "Failed to save attendance";
+      const errorMsg =
+        error.response?.data?.detail || "Failed to save attendance";
       setError(errorMsg);
       alert(errorMsg);
     }
@@ -196,28 +223,23 @@ export default function AttendanceReview() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="border-b border-gray-200 p-4 flex justify-between items-center bg-white shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-800">Attendance Review</h1>
-        <button
-          onClick={() => navigate('/attendance-assist')}
-          className="p-2 text-gray-600 hover:text-gray-800 flex items-center gap-2"
-        >
-          <ArrowLeft size={24} />
-          Back
-        </button>
-      </header>
+      <Header />
 
-      <main className="p-6 max-w-2xl mx-auto">
+      <main className="mb-10 p-6 max-w-2xl mx-auto mt-24">
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
         {attendance.length === 0 ? (
           <div className="bg-white rounded-lg shadow-lg p-6 text-center">
-            <p className="text-gray-600 text-lg font-medium">No attendance data available</p>
+            <p className="text-gray-600 text-lg font-medium">
+              No attendance data available
+            </p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 ">
             {images_base64.length > 0 ? (
               <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4">Processed Images</h2>
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                  Processed Images
+                </h2>
                 <div className="flex justify-between items-center mb-6">
                   <button
                     onClick={() => goToImage(activeImageIndex - 1)}
@@ -250,13 +272,15 @@ export default function AttendanceReview() {
                       rotateStyle = {};
                     } else if (
                       index === activeImageIndex - 1 ||
-                      (activeImageIndex === 0 && index === images_base64.length - 1)
+                      (activeImageIndex === 0 &&
+                        index === images_base64.length - 1)
                     ) {
                       positionClass = "absolute left-4 z-20";
                       rotateStyle = { transform: "rotate(-6deg)" };
                     } else if (
                       index === activeImageIndex + 1 ||
-                      (activeImageIndex === images_base64.length - 1 && index === 0)
+                      (activeImageIndex === images_base64.length - 1 &&
+                        index === 0)
                     ) {
                       positionClass = "absolute right-4 z-20";
                       rotateStyle = { transform: "rotate(6deg)" };
@@ -272,7 +296,10 @@ export default function AttendanceReview() {
                           src={`data:image/jpeg;base64,${image}`}
                           alt={`Processed image ${index + 1}`}
                           className="w-full h-full object-cover"
-                          onError={() => console.error(`Failed to load image ${index}`)}
+                          onClick={() => setPreviewImage(image)}
+                          onError={() =>
+                            console.error(`Failed to load image ${index}`)
+                          }
                         />
                       </div>
                     );
@@ -281,50 +308,82 @@ export default function AttendanceReview() {
               </div>
             ) : (
               <div className="bg-white rounded-lg shadow-lg p-6 text-center">
-                <p className="text-gray-600 text-lg font-medium">No processed images available</p>
+                <p className="text-gray-600 text-lg font-medium">
+                  No processed images available
+                </p>
               </div>
             )}
 
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-800">Detected Students</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Detected Students
+                </h2>
                 {!isEditing && (
                   <button
                     onClick={handleEditToggle}
-                    className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition"
+                    className="flex items-center gap-2 px-4 py-2 bg-yellow-400 text-white rounded-lg hover:bg-yellow-600 transition"
                   >
                     <Edit2 size={16} />
                     Edit Attendance
                   </button>
                 )}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left rounded-lg">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="py-3 px-4 text-gray-700 font-semibold rounded-tl-lg">Register Number</th>
-                      <th className="py-3 px-4 text-gray-700 font-semibold">Name</th>
-                      <th className="py-3 px-4 text-gray-700 font-semibold rounded-tr-lg">Status</th>
+              
+              {/* Full-width container with no constraints */}
+              <div className="w-full overflow-hidden">
+                {/* Wider table with cleaner design */}
+                <table className="w-full border-collapse border border-gray-300 min-w-full">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      {/* Adjusted column widths */}
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider border-b border-r border-gray-300 w-1/3">
+                        Register Number
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider border-b border-r border-gray-300 w-1/3">
+                        Name
+                      </th>
+                      <th className="px-6 py-4 text-center text-sm font-medium text-gray-700 uppercase tracking-wider border-b border-gray-300 w-1/3">
+                        Status
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {attendance.map((student) => (
-                      <tr key={student.register_number} className="border-b last:border-0 hover:bg-gray-50">
-                        <td className="py-3 px-4">{student.register_number}</td>
-                        <td className="py-3 px-4">{student.name}</td>
-                        <td className="py-3 px-4">
+                    {attendance.map((student, idx) => (
+                      <tr
+                        key={student.register_number}
+                        className={`${
+                          idx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                        } hover:bg-gray-100 transition-colors`}
+                      >
+                        {/* Improved cell styling */}
+                        <td className="px-6 py-4 whitespace-nowrap text-md font-medium text-gray-800 border-r border-gray-300">
+                          {student.register_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-md text-gray-700 border-r border-gray-300">
+                          {student.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-md text-center">
                           <button
-                            onClick={() => handleTogglePresence(student.register_number)}
-                            className={`flex items-center gap-1 ${isEditing ? 'cursor-pointer' : 'cursor-default'}`}
+                            onClick={() =>
+                              handleTogglePresence(student.register_number)
+                            }
+                            className={`inline-flex items-center justify-center rounded-full px-4 py-2 w-32 ${
+                              isEditing ? "cursor-pointer" : "cursor-default"
+                            } ${
+                              student.is_present 
+                                ? "bg-green-100 hover:bg-green-200" 
+                                : "bg-red-100 hover:bg-red-200"
+                            }`}
                             disabled={!isEditing}
                           >
                             {student.is_present ? (
-                              <span className="text-green-600 flex items-center gap-1">
-                                <Check size={16} /> Present
+                              <span className="text-green-700 flex items-center gap-2">
+                                <Check size={18} strokeWidth={2.5} /> Present
                               </span>
                             ) : (
-                              <span className="text-red-600 flex items-center gap-1">
-                                <X size={16} /> Absent
+                              <span className="text-red-700 flex items-center gap-2">
+                                <X size={18} strokeWidth={2.5} /> Absent
                               </span>
                             )}
                           </button>
@@ -334,16 +393,18 @@ export default function AttendanceReview() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-4 text-gray-700">
+
+              {/* Show student count information */}
+              <div className="mt-4 text-sm text-gray-600">
                 <p>
-                  Total Students: {attendance.length} | Present:{' '}
-                  {attendance.filter((s) => s.is_present).length} | Absent:{' '}
-                  {attendance.filter((s) => !s.is_present).length}
+                  Total Students: {attendance.length} | 
+                  Present: {attendance.filter(s => s.is_present).length} | 
+                  Absent: {attendance.filter(s => !s.is_present).length}
                 </p>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-lg p-6 flex justify-end gap-4">
+            <div className="bg-white rounded-lg shadow-lg p-6 flex justify-end gap-4 bottom-0">
               {isEditing ? (
                 <>
                   <button
@@ -362,7 +423,7 @@ export default function AttendanceReview() {
               ) : (
                 <>
                   <button
-                    onClick={() => navigate('/attendance-assist')}
+                    onClick={() => navigate("/attendance-assist")}
                     className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
                   >
                     Back to Upload
@@ -379,7 +440,20 @@ export default function AttendanceReview() {
           </div>
         )}
       </main>
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 bg-opacity-70 flex items-center justify-center z-50"
+          onClick={() => setPreviewImage(null)}
+        >
+          <img
+            src={`data:image/jpeg;base64,${previewImage}`}
+            alt="Preview"
+            className="max-w-full max-h-[90vh] rounded-lg shadow-lg"
+          />
+        </div>
+      )}
+      <Footer />
     </div>
   );
 }
-

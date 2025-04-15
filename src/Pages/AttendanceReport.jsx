@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Filter, Download, X, ChevronDown, ChevronUp } from "lucide-react";
 import axios from "axios";
 import * as XLSX from "xlsx";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
 
 export default function AttendanceReport() {
   const navigate = useNavigate();
@@ -189,33 +191,12 @@ export default function AttendanceReport() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Attendance Report</h1>
-        <button
-          onClick={() => navigate("/")}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center gap-2 rounded-lg hover:bg-gray-100"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back to Home
-        </button>
-      </header>
+      <Header />
 
-      <main className="max-w-6xl mx-auto p-6">
+      <main className="max-w-6xl mx-auto p-6 mt-28 mb-16">
         {/* Filter Modal */}
         {isFilterModalOpen && (
-          <div className="fixed inset-0 bg-blue-50 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-white bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md animate-slideIn">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
@@ -320,7 +301,7 @@ export default function AttendanceReport() {
         )}
 
         {/* Main Content */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-xl shadow-lg p-6 ">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-800">
               Attendance Records
@@ -490,6 +471,7 @@ export default function AttendanceReport() {
           }
         `}
       </style>
+      <Footer />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Menu, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Header from '../components/Header'
 
 export default function AttendanceAssist() {
   const [images, setImages] = useState([]);
@@ -197,11 +198,9 @@ export default function AttendanceAssist() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="border-b border-gray-200 p-4 flex justify-between items-center bg-white shadow-sm">
-        <h1 className="text-xl font-semibold text-gray-800">AI Attendance Assist</h1>
-      </header>
+      <Header />
 
-      <main className="p-6 max-w-2xl mx-auto">
+      <main className="p-6 mt-16 max-w-2xl mx-auto">
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
         {images.length === 0 ? (
           <div className="mt-12">

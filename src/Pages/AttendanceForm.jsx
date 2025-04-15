@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Calendar, Clock, FileText, ArrowRight, ArrowLeft } from "lucide-react";
+import { NavLink } from 'react-router-dom';
+import { Home, CheckCircle, Shield } from 'lucide-react';
 import axios from "axios";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
 
 const AttendanceForm = () => {
   const [departments, setDepartments] = useState([]);
@@ -324,7 +328,29 @@ const AttendanceForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-blue-50 flex items-center justify-center p-4">
+    <>
+      <header className="fixed top-0 w-full bg-white flex justify-center items-center border-b-2 border-none">
+      <div className="flex items-center w-[90%] max-w-[1200px] justify-between">
+        {/* NBA Logo */}
+        <div className="text-center">
+          <img
+            src="public/image.png"
+            alt="NBA Accreditation"
+            className="h-20 mx-auto mb-2"
+          />
+        </div>
+
+        {/* College Info */}
+        <div className="text-center flex-1 px-5">
+          <h1 className="text-2xl text-green-800 font-bold mb-2">
+            SRI SHAKTHI INSTITUTE OF ENGINEERING AND TECHNOLOGY
+          </h1>
+          <p className="text-sm text-gray-700 font-semibold"></p>
+        </div>
+
+      </div>
+    </header>
+    <div className="flex-grow pt-24 pb-24 min-h-screen bg-blue-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-lg">
         <div className="flex items-center justify-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">
@@ -602,6 +628,9 @@ const AttendanceForm = () => {
         `}
       </style>
     </div>
+    <Footer />
+    </>
+    
   );
 };
 
