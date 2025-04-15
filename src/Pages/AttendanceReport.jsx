@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Filter, Download, X, ChevronDown, ChevronUp } from "lucide-react";
 import axios from "axios";
 import * as XLSX from "xlsx";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 
@@ -12,7 +14,7 @@ export default function AttendanceReport() {
     dept_name: "",
     year: "",
     section_name: "",
-    date: "",
+    date: null, // Changed to null for the DatePicker
   });
   const [attendanceData, setAttendanceData] = useState([]);
   const [expandedPeriods, setExpandedPeriods] = useState({});
@@ -76,6 +78,15 @@ export default function AttendanceReport() {
     setError(null);
   };
 
+  // Add a specific handler for date changes
+  const handleDateChange = (date) => {
+    setFilters((prev) => ({
+      ...prev,
+      date: date,
+    }));
+    setError(null);
+  };
+
   const handleApplyFilters = async () => {
     if (
       !filters.dept_name ||
@@ -88,11 +99,18 @@ export default function AttendanceReport() {
     }
 
     try {
+      // Format the date for the API
+      const formattedDate = filters.date.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+      });
+
       const params = {
         dept_name: filters.dept_name,
         year: parseInt(filters.year, 10),
         section_name: filters.section_name,
-        date: filters.date,
+        date: formattedDate,
       };
 
       const response = await axios.get("http://localhost:8000/get-attendance", {
@@ -125,10 +143,10 @@ export default function AttendanceReport() {
           return acc;
         }, {})
       );
-      // Update formData with applied filters
+      // Update formData with formatted date for display
       setFormData({
         dept_name: filters.dept_name,
-        date: filters.date,
+        date: formattedDate,
       });
       setIsFilterModalOpen(false);
       setError(null);
@@ -149,8 +167,8 @@ export default function AttendanceReport() {
     attendanceData.forEach((period) => {
       // Add period header
       data.push({
-        "Period": `Subject: ${period.subject_name} (${period.subject_code})`,
-        "Time": `${period.start_time} - ${period.end_time}`,
+        Period: `Subject: ${period.subject_name} (${period.subject_code})`,
+        Time: `${period.start_time} - ${period.end_time}`,
       });
       // Add attendance records
       period.records.forEach((record) => {
@@ -172,7 +190,11 @@ export default function AttendanceReport() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance Report");
     XLSX.writeFile(
       workbook,
-      `Attendance_Report_${filters.date.replace(/\//g, "-")}.xlsx`
+      `Attendance_Report_${filters.date.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+      }).replace(/\//g, "-")}.xlsx`
     );
   };
 
@@ -181,7 +203,7 @@ export default function AttendanceReport() {
       dept_name: "",
       year: "",
       section_name: "",
-      date: "",
+      date: null,
     });
     setAttendanceData([]);
     setExpandedPeriods({});
@@ -205,7 +227,7 @@ export default function AttendanceReport() {
                 <button
                   onClick={() => {
                     setIsFilterModalOpen(false);
-                    navigate('/');
+                    navigate("/");
                   }}
                   className="text-gray-500 hover:text-gray-700"
                 >
@@ -272,13 +294,12 @@ export default function AttendanceReport() {
                   <label className="block text-sm font-medium text-gray-700">
                     Date
                   </label>
-                  <input
-                    type="text"
-                    name="date"
-                    value={filters.date}
-                    onChange={handleFilterChange}
-                    placeholder="MM/DD/YYYY"
+                  <DatePicker
+                    selected={filters.date}
+                    onChange={handleDateChange}
                     className="mt-1 block w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500"
+                    placeholderText="MM/DD/YYYY"
+                    dateFormat="MM/dd/yyyy"
                   />
                 </div>
               </div>

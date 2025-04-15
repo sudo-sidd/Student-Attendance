@@ -9,7 +9,7 @@ export default function Header() {
   
   const navLinks = [
     { to: "/", label: "Home", icon: <Home size={18} /> },
-    { to: "/report", label: "Report", icon: <FileText size={18} /> },
+    { to: "/admin", label: "Report", icon: <FileText size={18} /> },
     { to: "/superadmin", label: "Admin", icon: <ShieldCheck size={18} /> },
   ];
 

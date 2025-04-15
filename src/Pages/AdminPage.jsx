@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -10,8 +12,8 @@ export default function AdminPage() {
     dept_name: "",
     year: "",
     section_name: "",
-    date: "",
     subject_code: "",
+    date: null, // Changed to null for DatePicker
   });
   const [attendanceData, setAttendanceData] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -110,23 +112,32 @@ export default function AdminPage() {
     setError(null);
   };
 
+  const handleDateChange = (date) => {
+    setFilters(prev => ({
+      ...prev,
+      date: date
+    }));
+  };
+
   const handleApplyFilters = async () => {
     setLoading(true);
+    setError(null);
+
+    const params = {};
+    if (filters.dept_name) params.dept_name = filters.dept_name;
+    if (filters.year) params.year = parseInt(filters.year, 10);
+    if (filters.section_name) params.section_name = filters.section_name;
+    if (filters.subject_code) params.subject_code = filters.subject_code;
+    if (filters.date) {
+      // Format the date for the API
+      params.date = filters.date.toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+      });
+    }
+
     try {
-      const params = {};
-
-      // Only include filters that have values
-      if (filters.dept_name) params.dept_name = filters.dept_name;
-      if (filters.year) params.year = parseInt(filters.year, 10);
-      if (filters.section_name) params.section_name = filters.section_name;
-      if (filters.date) params.date = filters.date;
-      if (filters.subject_code) params.subject_code = filters.subject_code;
-
-      // If no filters are applied, fetch all data
-      if (Object.keys(params).length === 0) {
-        return fetchAllAttendanceData();
-      }
-
       const response = await axios.get("http://localhost:8000/get-attendance", { params });
 
       // Sort by date and time (newest first)
@@ -150,7 +161,7 @@ export default function AdminPage() {
       dept_name: "",
       year: "",
       section_name: "",
-      date: "",
+      date: null,
       subject_code: "",
     });
     fetchAllAttendanceData();
@@ -308,15 +319,15 @@ export default function AdminPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date (MM/DD/YYYY)
+                Date
               </label>
-              <input
-                type="text"
-                name="date"
-                value={filters.date}
-                onChange={handleFilterChange}
-                placeholder="All Dates"
+              <DatePicker
+                selected={filters.date}
+                onChange={handleDateChange}
                 className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500"
+                placeholderText="All Dates"
+                dateFormat="MM/dd/yyyy"
+                isClearable
               />
             </div>
           </div>
@@ -387,7 +398,11 @@ export default function AdminPage() {
               )}
               {filters.date && (
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                  Date: {filters.date}
+                  Date: {filters.date.toLocaleDateString("en-US", {
+                    month: "2-digit",
+                    day: "2-digit",
+                    year: "numeric",
+                  })}
                 </span>
               )}
             </div>
